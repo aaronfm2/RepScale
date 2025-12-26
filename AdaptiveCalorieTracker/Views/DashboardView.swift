@@ -123,25 +123,25 @@ struct DashboardView: View {
     
     private var logicDescription: String {
         switch estimationMethod {
-        case 0: return "Based on maintenance vs daily goal"
+        case 0: return "Based on 30-day weight trend"
         case 1: return "Based on 7-day average intake"
-        case 2: return "Based on 30-day weight trend"
+        case 2: return "Based on maintenance vs daily goal"
         default: return ""
         }
     }
     
     private var progressWarningMessage: String {
         switch estimationMethod {
-        case 0: // Fixed Target
-            return goalType == "Cutting"
-                ? "Your daily goal must be lower than your maintenance (\(maintenanceCalories))"
-                : "Your daily goal must be higher than your maintenance (\(maintenanceCalories))"
+        case 0: // Weight Trend
+            return "Need more weight data over 30 days, or trend is moving away from goal."
         case 1: // Avg Intake
             return goalType == "Cutting"
                 ? "Eat less than maintenance on average to see estimate"
                 : "Eat more than maintenance on average to see estimate"
-        case 2: // Weight Trend
-            return "Need more weight data over 30 days, or trend is moving away from goal."
+        case 2: // Fixed Target
+            return goalType == "Cutting"
+                ? "Your daily goal must be lower than your maintenance (\(maintenanceCalories))"
+                : "Your daily goal must be higher than your maintenance (\(maintenanceCalories))"
         default: return ""
         }
     }
