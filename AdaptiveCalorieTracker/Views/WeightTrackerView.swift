@@ -6,6 +6,8 @@ struct WeightTrackerView: View {
     // Sort by date descending
     @Query(sort: \WeightEntry.date, order: .reverse) private var weights: [WeightEntry]
     
+    @AppStorage("goalType") private var currentGoalType: String = "Cutting"
+    
     @State private var showingAddWeight = false
     @State private var newWeight: String = ""
     @State private var selectedDate: Date = Date()
@@ -87,21 +89,20 @@ struct WeightTrackerView: View {
     }
 
     private func syncToDailyLog(date: Date, weight: Double) {
-        // Daily Logs only care about the specific DAY (ignoring time)
         let normalizedDate = Calendar.current.startOfDay(for: date)
         
-        // Attempt to find an existing log for this day
         let fetchDescriptor = FetchDescriptor<DailyLog>(
             predicate: #Predicate { $0.date == normalizedDate }
         )
         
         do {
             if let existingLog = try modelContext.fetch(fetchDescriptor).first {
-                // If log exists (e.g., you already logged food), just update the weight
                 existingLog.weight = weight
+                // Optional: You could update the goal type here if missing,
+                // but usually we preserve history.
             } else {
-                // If no log exists for this day, create a new one with the weight
-                let newLog = DailyLog(date: normalizedDate, weight: weight)
+                // Include goalType when creating new log
+                let newLog = DailyLog(date: normalizedDate, weight: weight, goalType: currentGoalType) // <--- UPDATED
                 modelContext.insert(newLog)
             }
         } catch {

@@ -8,6 +8,8 @@ struct ContentView: View {
     @StateObject var healthManager = HealthManager()
     
     @AppStorage("dailyCalorieGoal") private var dailyGoal: Int = 2000
+    // Access the current goal type setting
+    @AppStorage("goalType") private var currentGoalType: String = "Cutting" // <--- NEW
     
     // Sheet State
     @State private var showingLogSheet = false
@@ -86,7 +88,7 @@ struct ContentView: View {
                         .disabled(caloriesInput.isEmpty)
                     }
                 }
-                .presentationDetents([.medium]) // Increased height to fit new controls
+                .presentationDetents([.medium])
                 .padding()
             }
             .onAppear(perform: setupOnAppear)
@@ -101,7 +103,7 @@ struct ContentView: View {
     private func saveCalories() {
         guard let inputVal = Int(caloriesInput) else { return }
         
-        // 4. Normalize the selected date (not just Date() anymore)
+        // 4. Normalize the selected date
         let logDate = Calendar.current.startOfDay(for: selectedLogDate)
         
         // Find the log for that specific date
@@ -114,25 +116,22 @@ struct ContentView: View {
                 existingLog.caloriesConsumed = inputVal
             }
         } else {
-            // Create new log if it doesn't exist
-            let newLog = DailyLog(date: logDate, caloriesConsumed: inputVal)
+            // Create new log if it doesn't exist, INCLUDING THE GOAL TYPE
+            let newLog = DailyLog(date: logDate, caloriesConsumed: inputVal, goalType: currentGoalType) // <--- UPDATED
             modelContext.insert(newLog)
         }
         
         showingLogSheet = false
     }
     
-    // ... (Existing helper functions below remain unchanged) ...
+    // ... (Existing helper functions) ...
     
     private func setupOnAppear() {
         healthManager.requestAuthorization()
         healthManager.fetchTodayCaloriesBurned()
         
-        let today = Calendar.current.startOfDay(for: Date())
-        if !logs.contains(where: { $0.date == today }) {
-             let newItem = DailyLog(date: today)
-             modelContext.insert(newItem)
-        }
+        // Use AppStorage directly here if needed, but saveCalories handles manual adds.
+        // For auto-creation on load, we assume 'Cutting' default or whatever is in AppStorage
     }
     
     private func updateTodayBurned(_ newValue: Double) {
@@ -170,7 +169,20 @@ struct ContentView: View {
             VStack(alignment: .leading) {
                 Text(log.date, style: .date).font(.body)
                 if let w = log.weight {
-                    Text("\(w, specifier: "%.1f") kg").font(.caption).foregroundColor(.secondary)
+                    // Display Weight AND Goal Type
+                    HStack(spacing: 4) {
+                        Text("\(w, specifier: "%.1f") kg")
+                        if let goal = log.goalType {
+                            Text("(\(goal))") // <--- NEW DISPLAY
+                                .font(.caption2)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(Color.gray.opacity(0.1))
+                                .cornerRadius(4)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
                 }
             }
             Spacer()

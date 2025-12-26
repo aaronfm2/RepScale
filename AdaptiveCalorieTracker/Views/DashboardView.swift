@@ -208,7 +208,8 @@ struct DashboardView: View {
         
         let today = Calendar.current.startOfDay(for: Date())
         if !logs.contains(where: { $0.date == today }) {
-            let newItem = DailyLog(date: today)
+            // Pass the goalType stored in DashboardView
+            let newItem = DailyLog(date: today, goalType: goalType) // <--- UPDATED
             modelContext.insert(newItem)
         }
     }
