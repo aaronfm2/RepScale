@@ -63,9 +63,32 @@ struct ContentView: View {
                 logSheetContent
             }
             .onAppear(perform: setupOnAppear)
+            // --- SYNC HEALTHKIT DATA CHANGES ---
             .onChange(of: healthManager.caloriesBurnedToday) { _, newValue in
-                updateTodayBurned(newValue)
+                updateTodayLog { $0.caloriesBurned = Int(newValue) }
             }
+            .onChange(of: healthManager.caloriesConsumedToday) { _, newValue in
+                // Only update if HealthKit has data (> 0) to avoid wiping manual entries on launch if HK is slow
+                if newValue > 0 {
+                    updateTodayLog { $0.caloriesConsumed = Int(newValue) }
+                }
+            }
+            .onChange(of: healthManager.proteinToday) { _, newValue in
+                if newValue > 0 {
+                    updateTodayLog { $0.protein = Int(newValue) }
+                }
+            }
+            .onChange(of: healthManager.carbsToday) { _, newValue in
+                if newValue > 0 {
+                    updateTodayLog { $0.carbs = Int(newValue) }
+                }
+            }
+            .onChange(of: healthManager.fatToday) { _, newValue in
+                if newValue > 0 {
+                    updateTodayLog { $0.fat = Int(newValue) }
+                }
+            }
+            // ------------------------------------
         }
     }
 
@@ -152,7 +175,6 @@ struct ContentView: View {
         if let existingLog = logs.first(where: { $0.date == logDate }) {
             if inputMode == 0 {
                 // Add mode: Append calories, but for macros we usually just overwrite or add if not nil
-                // Simple approach: Add calories, Overwrite macros if provided
                 existingLog.caloriesConsumed += calVal
             } else {
                 existingLog.caloriesConsumed = calVal
@@ -182,13 +204,22 @@ struct ContentView: View {
     
     private func setupOnAppear() {
         healthManager.requestAuthorization()
-        healthManager.fetchTodayCaloriesBurned()
+        // Call the new method that fetches everything (Calories Burned + Nutrition)
+        healthManager.fetchAllHealthData()
     }
     
-    private func updateTodayBurned(_ newValue: Double) {
+    // Generic helper to update Today's log safely
+    private func updateTodayLog(update: (DailyLog) -> Void) {
         let todayDate = Calendar.current.startOfDay(for: Date())
-        if let today = logs.first(where: { $0.date == todayDate }) {
-            today.caloriesBurned = Int(newValue)
+        
+        if let todayLog = logs.first(where: { $0.date == todayDate }) {
+            // Update existing log
+            update(todayLog)
+        } else {
+            // Create new log if it doesn't exist yet (e.g. first launch of the day)
+            let newLog = DailyLog(date: todayDate, goalType: currentGoalType)
+            update(newLog)
+            modelContext.insert(newLog)
         }
     }
     
@@ -215,7 +246,6 @@ struct ContentView: View {
         }
     }
     
-    // Use the updated logRow from previous request
     private func logRow(for log: DailyLog) -> some View {
         let workout = getWorkout(for: log.date)
         
