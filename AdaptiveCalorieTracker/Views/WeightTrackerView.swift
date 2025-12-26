@@ -98,11 +98,16 @@ struct WeightTrackerView: View {
         do {
             if let existingLog = try modelContext.fetch(fetchDescriptor).first {
                 existingLog.weight = weight
-                // Optional: You could update the goal type here if missing,
-                // but usually we preserve history.
+                
+                // --- FIX: Backfill Goal Type if missing ---
+                if existingLog.goalType == nil {
+                    existingLog.goalType = currentGoalType
+                }
+                // ------------------------------------------
+                
             } else {
                 // Include goalType when creating new log
-                let newLog = DailyLog(date: normalizedDate, weight: weight, goalType: currentGoalType) // <--- UPDATED
+                let newLog = DailyLog(date: normalizedDate, weight: weight, goalType: currentGoalType)
                 modelContext.insert(newLog)
             }
         } catch {

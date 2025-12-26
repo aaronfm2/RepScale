@@ -24,13 +24,13 @@ struct DashboardView: View {
     // 0 = Fixed Target (Logic 1), 1 = Avg Intake (Logic 2), 2 = Weight Trend (Logic 3)
     
     @State private var showingSettings = false
-    @State private var showingMaintenanceInfo = false // <--- New State for Info Button
+    @State private var showingMaintenanceInfo = false
 
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
-                    // 1. Progress to Target Calculation (UPDATED)
+                    // 1. Progress to Target Calculation
                     targetProgressCard
                     
                     // 2. Projection Comparison Graph
@@ -111,7 +111,7 @@ struct DashboardView: View {
                             .padding(.horizontal)
                     }
                     
-                    // --- NEW SECTION: Estimated Maintenance ---
+                    // --- Estimated Maintenance ---
                     if let estMaint = calculateEstimatedMaintenance() {
                         Divider().padding(.vertical, 8)
                         
@@ -126,7 +126,7 @@ struct DashboardView: View {
                             }
                         }
                     }
-                    // ------------------------------------------
+                    // -----------------------------
                 }
             } else {
                 Text("\(goalType): \(targetWeight, specifier: "%.1f") kg")
@@ -172,40 +172,43 @@ struct DashboardView: View {
         }
     }
     
-    /// Calculates maintenance based on actual data: Avg Intake - (WeightChange * 7700 / Days)
     private func calculateEstimatedMaintenance() -> Int? {
         let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
         
         // Get weights in range, sorted Oldest -> Newest
         let recentWeights = weights.filter { $0.date >= thirtyDaysAgo }.sorted { $0.date < $1.date }
         
-        // Need at least 2 distinct weight entries to measure change
+        // Need at least 2 distinct weight entries
         guard let first = recentWeights.first, let last = recentWeights.last, first.id != last.id else {
             return nil
         }
         
-        let days = Calendar.current.dateComponents([.day], from: first.date, to: last.date).day ?? 0
+        // --- FIX: Use startOfDay to count calendar days correctly ---
+        let start = Calendar.current.startOfDay(for: first.date)
+        let end = Calendar.current.startOfDay(for: last.date)
+        let days = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 0
+        
         guard days > 0 else { return nil }
         
         // Weight Change (+ve gain, -ve loss)
         let weightChange = last.weight - first.weight
         
-        // Get logs strictly within this date range
-        let relevantLogs = logs.filter { $0.date >= first.date && $0.date <= last.date }
+        // Exclude Today's Logs
+        let today = Calendar.current.startOfDay(for: Date())
+        
+        // Get logs strictly within this date range AND strictly before today
+        let relevantLogs = logs.filter { $0.date >= first.date && $0.date <= last.date && $0.date < today }
+        
         guard !relevantLogs.isEmpty else { return nil }
         
-        // Calculate Average Daily Intake (only counting days user actually logged)
+        // Calculate Average Daily Intake
         let totalConsumed = relevantLogs.reduce(0) { $0 + $1.caloriesConsumed }
         let avgDailyIntake = Double(totalConsumed) / Double(relevantLogs.count)
         
         // Calculate Daily Energy Imbalance from Weight Change
-        // 1kg = 7700kcal.
-        // If weightChange is +1kg over 10 days, surplus was 7700/10 = 770/day.
         let dailyImbalance = (weightChange * 7700.0) / Double(days)
         
         // Maintenance = Intake - Imbalance
-        // e.g. If Intake 2500 and Gained weight (Surplus 200), Maintenance = 2300.
-        // e.g. If Intake 2000 and Lost weight (Deficit -500), Maintenance = 2000 - (-500) = 2500.
         let estimatedMaintenance = avgDailyIntake - dailyImbalance
         
         return Int(estimatedMaintenance)
@@ -217,11 +220,13 @@ struct DashboardView: View {
             let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
             let recentWeights = weights.filter { $0.date >= thirtyDaysAgo }.sorted { $0.date < $1.date }
             
-            guard recentWeights.count >= 2,
-                  let first = recentWeights.first,
-                  let last = recentWeights.last else { return nil }
+            guard let first = recentWeights.first, let last = recentWeights.last, first.id != last.id else { return nil }
             
-            let timeSpan = Calendar.current.dateComponents([.day], from: first.date, to: last.date).day ?? 0
+            // --- FIX: Use startOfDay for robust day difference ---
+            let start = Calendar.current.startOfDay(for: first.date)
+            let end = Calendar.current.startOfDay(for: last.date)
+            let timeSpan = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 0
+            
             if timeSpan > 0 {
                 let weightChange = last.weight - first.weight
                 return weightChange / Double(timeSpan)
@@ -230,12 +235,16 @@ struct DashboardView: View {
         
         // Method 1: Avg Intake (User Maintenance - 7 Day Avg)
         if method == 1 {
-            let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
-            let recentLogs = logs.filter { $0.date >= sevenDaysAgo }
+            let today = Calendar.current.startOfDay(for: Date())
+            // Look at 7 days *before* today
+            let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: today)!
+            
+            let recentLogs = logs.filter { $0.date >= sevenDaysAgo && $0.date < today }
             
             if !recentLogs.isEmpty {
                 let totalConsumed = recentLogs.reduce(0) { $0 + $1.caloriesConsumed }
                 let avgConsumed = Double(totalConsumed) / Double(recentLogs.count)
+                
                 return (avgConsumed - Double(maintenanceCalories)) / 7700.0
             }
         }
@@ -329,7 +338,8 @@ struct DashboardView: View {
         let comparisonMethods = [(0, "Trend (30d)"), (1, "Avg Intake (7d)"), (2, "Fixed Goal")]
         
         for (methodId, label) in comparisonMethods {
-            if let rate = calculateKgChangePerDay(method: methodId), abs(rate) > 0.001 {
+            // --- FIX: Removed the abs(rate) > 0.001 check so even small trends show ---
+            if let rate = calculateKgChangePerDay(method: methodId) {
                 points.append(ProjectionPoint(date: today, weight: startWeight, method: label))
                 for i in 1...60 {
                     let nextDate = Calendar.current.date(byAdding: .day, value: i, to: today)!

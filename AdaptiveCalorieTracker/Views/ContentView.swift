@@ -9,7 +9,7 @@ struct ContentView: View {
     
     @AppStorage("dailyCalorieGoal") private var dailyGoal: Int = 2000
     // Access the current goal type setting
-    @AppStorage("goalType") private var currentGoalType: String = "Cutting" // <--- NEW
+    @AppStorage("goalType") private var currentGoalType: String = "Cutting"
     
     // Sheet State
     @State private var showingLogSheet = false
@@ -115,9 +115,16 @@ struct ContentView: View {
                 // Set mode: Overwrite completely
                 existingLog.caloriesConsumed = inputVal
             }
+            
+            // --- FIX: Backfill Goal Type if missing ---
+            if existingLog.goalType == nil {
+                existingLog.goalType = currentGoalType
+            }
+            // ------------------------------------------
+            
         } else {
             // Create new log if it doesn't exist, INCLUDING THE GOAL TYPE
-            let newLog = DailyLog(date: logDate, caloriesConsumed: inputVal, goalType: currentGoalType) // <--- UPDATED
+            let newLog = DailyLog(date: logDate, caloriesConsumed: inputVal, goalType: currentGoalType)
             modelContext.insert(newLog)
         }
         
@@ -173,7 +180,7 @@ struct ContentView: View {
                     HStack(spacing: 4) {
                         Text("\(w, specifier: "%.1f") kg")
                         if let goal = log.goalType {
-                            Text("(\(goal))") // <--- NEW DISPLAY
+                            Text("(\(goal))")
                                 .font(.caption2)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 2)
