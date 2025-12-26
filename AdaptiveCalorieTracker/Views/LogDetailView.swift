@@ -5,6 +5,8 @@ struct LogDetailView: View {
     let log: DailyLog
     let workout: Workout? // Passed in from parent
     
+    @AppStorage("enableCaloriesBurned") private var enableCaloriesBurned: Bool = true
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
@@ -38,12 +40,16 @@ struct LogDetailView: View {
                                 .font(.title3).bold()
                         }
                         Spacer()
-                        VStack(alignment: .trailing) {
-                            Text("Calories Burned")
-                                .font(.caption).foregroundColor(.secondary)
-                            Text("\(log.caloriesBurned)")
-                                .font(.title3).bold()
-                                .foregroundColor(.orange)
+                        
+                        // --- CONDITIONALLY SHOW BURNED ---
+                        if enableCaloriesBurned {
+                            VStack(alignment: .trailing) {
+                                Text("Calories Burned")
+                                    .font(.caption).foregroundColor(.secondary)
+                                Text("\(log.caloriesBurned)")
+                                    .font(.title3).bold()
+                                    .foregroundColor(.orange)
+                            }
                         }
                     }
                 }

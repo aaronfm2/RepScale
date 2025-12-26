@@ -23,6 +23,9 @@ struct DashboardView: View {
     @AppStorage("estimationMethod") private var estimationMethod: Int = 0
     // 0 = Fixed Target (Logic 1), 1 = Avg Intake (Logic 2), 2 = Weight Trend (Logic 3)
     
+    // --- NEW TOGGLE ---
+    @AppStorage("enableCaloriesBurned") private var enableCaloriesBurned: Bool = true
+    
     @State private var showingSettings = false
     @State private var showingMaintenanceInfo = false
 
@@ -396,14 +399,20 @@ struct DashboardView: View {
     
     private var calorieBalanceCard: some View {
         VStack(alignment: .leading) {
-            Text("Net Calories (Last 7 Days)").font(.headline)
+            // Dynamic Title based on Toggle
+            Text(enableCaloriesBurned ? "Net Calories (Last 7 Days)" : "Calories Consumed (Last 7 Days)")
+                .font(.headline)
+            
             Chart {
                 ForEach(logs.suffix(7)) { log in
+                    // Determine value to plot
+                    let val = enableCaloriesBurned ? log.netCalories : log.caloriesConsumed
+                    
                     BarMark(
                         x: .value("Day", log.date, unit: .day),
-                        y: .value("Net", log.netCalories)
+                        y: .value("Net", val)
                     )
-                    .foregroundStyle(log.netCalories > 0 ? .red : .green)
+                    .foregroundStyle(val > 0 ? .red : .green)
                 }
             }
             .frame(height: 150)
@@ -438,6 +447,9 @@ struct DashboardView: View {
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
                     }
+                    
+                    // --- NEW TOGGLE ---
+                    Toggle("Track Calories Burned", isOn: $enableCaloriesBurned)
                 }
                 
                 Section("Prediction Logic") {

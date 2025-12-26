@@ -12,6 +12,9 @@ struct ContentView: View {
     @AppStorage("dailyCalorieGoal") private var dailyGoal: Int = 2000
     @AppStorage("goalType") private var currentGoalType: String = "Cutting"
     
+    // --- NEW TOGGLE ---
+    @AppStorage("enableCaloriesBurned") private var enableCaloriesBurned: Bool = true
+    
     // Sheet State
     @State private var showingLogSheet = false
     @State private var selectedLogDate = Date()
@@ -232,7 +235,10 @@ struct ContentView: View {
     @ViewBuilder
     private var summaryHeader: some View {
         if let today = logs.first(where: { Calendar.current.isDateInToday($0.date) }) {
-            let remaining = dailyGoal + today.caloriesBurned - today.caloriesConsumed
+            // --- UPDATED LOGIC ---
+            let burned = enableCaloriesBurned ? today.caloriesBurned : 0
+            let remaining = dailyGoal + burned - today.caloriesConsumed
+            
             VStack(spacing: 5) {
                 Text("\(remaining)")
                     .font(.system(size: 40, weight: .bold))
@@ -271,10 +277,14 @@ struct ContentView: View {
                     Image(systemName: "fork.knife").font(.caption2)
                     Text("\(log.caloriesConsumed) kcal")
                 }.foregroundColor(.blue)
-                HStack(spacing: 4) {
-                    Image(systemName: "flame.fill").font(.caption2)
-                    Text("\(log.caloriesBurned) kcal")
-                }.foregroundColor(.orange)
+                
+                // --- CONDITIONALLY SHOW BURNED ---
+                if enableCaloriesBurned {
+                    HStack(spacing: 4) {
+                        Image(systemName: "flame.fill").font(.caption2)
+                        Text("\(log.caloriesBurned) kcal")
+                    }.foregroundColor(.orange)
+                }
             }
             .font(.subheadline)
         }
