@@ -7,6 +7,8 @@ struct WeightTrackerView: View {
     
     @State private var showingAddWeight = false
     @State private var newWeight: String = ""
+    // 1. Add state to hold the selected date
+    @State private var selectedDate: Date = Date()
 
     var body: some View {
         NavigationView {
@@ -23,29 +25,44 @@ struct WeightTrackerView: View {
             }
             .navigationTitle("Weight History")
             .toolbar {
-                Button(action: { showingAddWeight = true }) {
+                Button(action: {
+                    selectedDate = Date() // Reset to today when opening
+                    showingAddWeight = true
+                }) {
                     Image(systemName: "plus")
                 }
             }
             .sheet(isPresented: $showingAddWeight) {
                 VStack(spacing: 20) {
                     Text("Add Weight").font(.headline)
+                    
+                    // 2. Add the DatePicker
+                    DatePicker("Date", selection: $selectedDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .padding()
+                    
                     TextField("Enter weight (kg)", text: $newWeight)
                         .textFieldStyle(.roundedBorder)
                         .keyboardType(.decimalPad)
-                        .padding()
+                        .padding(.horizontal)
                     
                     Button("Save") {
                         if let weightDouble = Double(newWeight) {
-                            let entry = WeightEntry(weight: weightDouble)
+                            // 3. Pass the selectedDate to the model
+                            let entry = WeightEntry(date: selectedDate, weight: weightDouble)
                             modelContext.insert(entry)
+                            
+                            // Reset fields
                             newWeight = ""
                             showingAddWeight = false
                         }
                     }
                     .buttonStyle(.borderedProminent)
+                    .disabled(newWeight.isEmpty)
                 }
-                .presentationDetents([.medium])
+                .padding()
+                // Adjusted detent to .large to fit the graphical calendar
+                .presentationDetents([.large])
             }
         }
     }

@@ -4,12 +4,18 @@ import Charts
 
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
+    
+    // Fetch logs for calorie data
     @Query(sort: \DailyLog.date, order: .forward) private var logs: [DailyLog]
+    
+    // Fetch weights for the graph and progress (Reverse order for "Latest Weight", but we sort for Graph)
     @Query(sort: \WeightEntry.date, order: .reverse) private var weights: [WeightEntry]
+    
     @StateObject var healthManager = HealthManager()
     
     @AppStorage("dailyCalorieGoal") private var dailyGoal: Int = 2000
     @AppStorage("targetWeight") private var targetWeight: Double = 70.0
+    @AppStorage("goalType") private var goalType: String = "Cutting"
     @State private var showingSettings = false
 
     var body: some View {
@@ -22,20 +28,35 @@ struct DashboardView: View {
                     // 2. Weight Trend Graph
                     VStack(alignment: .leading) {
                         Text("Weight Trend").font(.headline)
-                        if logs.filter({ $0.weight != nil }).isEmpty {
-                            Text("No weight data logged yet").font(.caption).foregroundColor(.secondary)
+                        
+                        if weights.isEmpty {
+                            Text("No weight data logged yet")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding()
                         } else {
                             Chart {
-                                ForEach(logs.filter { $0.weight != nil }) { log in
+                                // Sort by date ascending so the line draws Left -> Right
+                                ForEach(weights.sorted(by: { $0.date < $1.date })) { entry in
                                     LineMark(
-                                        x: .value("Date", log.date),
-                                        y: .value("Weight", log.weight ?? 0)
+                                        x: .value("Date", entry.date),
+                                        y: .value("Weight", entry.weight)
                                     )
                                     .interpolationMethod(.catmullRom)
+                                    .foregroundStyle(.blue)
+                                    
+                                    // Add dots for specific data points
+                                    PointMark(
+                                        x: .value("Date", entry.date),
+                                        y: .value("Weight", entry.weight)
+                                    )
                                     .foregroundStyle(.blue)
                                 }
                             }
                             .frame(height: 180)
+                            // Ensure the X-axis handles dates correctly
+                            .chartXScale(domain: .automatic(includesZero: false))
                         }
                     }
                     .padding()
@@ -74,37 +95,51 @@ struct DashboardView: View {
     }
 
     private var targetProgressCard: some View {
-        // Uses the most recent weight from WeightEntry or DailyLog
-        let currentWeight = weights.first?.weight ?? logs.last(where: { $0.weight != nil })?.weight ?? 0.0
-        let weightDifference = currentWeight - targetWeight
-        let avgDeficit = calculateAverageDeficit()
+        // Get the latest weight from the weight entries list
+        let currentWeight = weights.first?.weight
+        let avgSurplusDeficit = calculateAverageSurplusDeficit()
         
         return VStack(spacing: 12) {
-            Text("Target: \(targetWeight, specifier: "%.1f") kg")
+            Text("\(goalType): \(targetWeight, specifier: "%.1f") kg")
                 .font(.subheadline).foregroundColor(.secondary)
             
-            if weightDifference > 0 && avgDeficit > 0 {
-                // Calculation: 1kg of fat ≈ 7700 calories
-                let totalCaloriesToLose = weightDifference * 7700
-                let daysLeft = Int(totalCaloriesToLose / Double(avgDeficit))
+            if let current = currentWeight, current > 0 {
+                // Determine if the goal is reached based on goalType
+                let isGoalReached = goalType == "Cutting" ? current <= targetWeight : current >= targetWeight
                 
-                Text("\(daysLeft)")
-                    .font(.system(size: 60, weight: .bold))
-                    .foregroundColor(.orange)
-                Text("Days until target hit")
-                    .font(.headline)
-                Text("Based on 7-day avg deficit: \(avgDeficit) kcal")
-                    .font(.caption).foregroundColor(.secondary)
-            } else if weightDifference <= 0 && currentWeight > 0 {
-                Text("Target Reached!")
-                    .font(.title).bold()
-                    .foregroundColor(.green)
+                if isGoalReached {
+                    Text("Target Reached!")
+                        .font(.title).bold()
+                        .foregroundColor(.green)
+                } else {
+                    // Calculation: 1kg of body mass is roughly 7700 calories
+                    let weightToChange = abs(current - targetWeight)
+                    let totalCaloriesNeeded = weightToChange * 7700
+                    
+                    // For Cutting, we want a positive deficit (Rate > 0)
+                    // For Bulking, we want a negative deficit (surplus), so we flip the rate
+                    let effectiveDailyRate = goalType == "Cutting" ? avgSurplusDeficit : -avgSurplusDeficit
+                    
+                    if effectiveDailyRate > 0 {
+                        let daysLeft = Int(totalCaloriesNeeded / Double(effectiveDailyRate))
+                        Text("\(daysLeft)")
+                            .font(.system(size: 60, weight: .bold))
+                            .foregroundColor(.orange)
+                        Text("Days until target hit")
+                            .font(.headline)
+                    } else {
+                        Text("Check Calories")
+                            .font(.title3).bold()
+                        Text(goalType == "Cutting" ? "Maintain a deficit to see estimate" : "Maintain a surplus to see estimate")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                }
             } else {
-                Text("Pending Data")
+                Text("No Weight Data")
                     .font(.title3).bold()
-                Text(avgDeficit <= 0 ? "Maintain a calorie deficit to see estimate" : "Log your weight to see progress")
+                    .foregroundColor(.secondary)
+                Text("Log your weight in the Weight tab")
                     .font(.caption)
-                    .multilineTextAlignment(.center)
                     .foregroundColor(.secondary)
             }
         }
@@ -113,18 +148,26 @@ struct DashboardView: View {
         .background(RoundedRectangle(cornerRadius: 15).fill(Color.orange.opacity(0.1)))
     }
 
-    private func calculateAverageDeficit() -> Int {
+    private func calculateAverageSurplusDeficit() -> Int {
         let last7Logs = logs.suffix(7)
         guard !last7Logs.isEmpty else { return 0 }
-        // Deficit = Burned - Consumed
-        let totalDeficit = last7Logs.reduce(0) { $0 + ($1.caloriesBurned - $1.caloriesConsumed) }
-        return max(0, totalDeficit / last7Logs.count)
+        // Positive = Deficit (Weight Loss), Negative = Surplus (Weight Gain)
+        let total = last7Logs.reduce(0) { $0 + ($1.caloriesBurned - $1.caloriesConsumed) }
+        return total / last7Logs.count
     }
 
     private var settingsSheet: some View {
         NavigationView {
             Form {
                 Section("Health Goals") {
+                    // Goal Type Picker
+                    Picker("Goal Type", selection: $goalType) {
+                        Text("Cutting (Lose Weight)").tag("Cutting")
+                        Text("Bulking (Gain Weight)").tag("Bulking")
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.vertical, 5)
+
                     HStack {
                         Text("Target Weight (kg)")
                         Spacer()
