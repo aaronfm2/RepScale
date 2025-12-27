@@ -3,7 +3,7 @@ import SwiftData
 
 struct LogDetailView: View {
     let log: DailyLog
-    let workout: Workout? // Passed in from parent
+    let workouts: [Workout] // --- FIX: Changed from Workout? to [Workout] ---
     
     @AppStorage("enableCaloriesBurned") private var enableCaloriesBurned: Bool = true
     
@@ -41,7 +41,6 @@ struct LogDetailView: View {
                         }
                         Spacer()
                         
-                        // --- CONDITIONALLY SHOW BURNED ---
                         if enableCaloriesBurned {
                             VStack(alignment: .trailing) {
                                 Text("Calories Burned")
@@ -57,63 +56,11 @@ struct LogDetailView: View {
                 .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
                 .padding(.horizontal)
 
-                // 3. Workout Section
+                // 3. Workouts Section
                 VStack(alignment: .leading, spacing: 15) {
-                    Text("Workout").font(.headline).padding(.horizontal)
+                    Text("Workouts").font(.headline).padding(.horizontal)
                     
-                    if let w = workout {
-                        VStack(alignment: .leading, spacing: 12) {
-                            // Header: Category & Muscles
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(w.category)
-                                        .font(.title3).bold()
-                                        .foregroundColor(.blue)
-                                    Text(w.muscleGroups.joined(separator: ", "))
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: "dumbbell.fill")
-                                    .font(.largeTitle)
-                                    .foregroundColor(.blue.opacity(0.2))
-                            }
-                            .padding(.bottom, 5)
-                            
-                            Divider()
-                            
-                            // Exercise List
-                            if w.exercises.isEmpty {
-                                Text("No exercises logged.")
-                                    .font(.caption).italic().foregroundColor(.secondary)
-                            } else {
-                                ForEach(w.exercises) { exercise in
-                                    HStack {
-                                        VStack(alignment: .leading) {
-                                            Text(exercise.name).fontWeight(.medium)
-                                            if !exercise.note.isEmpty {
-                                                Text(exercise.note).font(.caption2).foregroundColor(.secondary)
-                                            }
-                                        }
-                                        Spacer()
-                                        Text("\(exercise.reps) x \(exercise.weight, specifier: "%.1f")kg")
-                                            .font(.callout).monospacedDigit()
-                                    }
-                                    .padding(.vertical, 4)
-                                }
-                            }
-                            
-                            if !w.note.isEmpty {
-                                Divider()
-                                Text("Note: \(w.note)")
-                                    .font(.caption).italic().foregroundColor(.secondary)
-                            }
-                        }
-                        .padding()
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.blue.opacity(0.05)))
-                        .padding(.horizontal)
-                        
-                    } else {
+                    if workouts.isEmpty {
                         // Empty State
                         HStack {
                             Spacer()
@@ -129,6 +76,61 @@ struct LogDetailView: View {
                         .padding()
                         .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.05)))
                         .padding(.horizontal)
+                        
+                    } else {
+                        // --- FIX: Loop through ALL workouts ---
+                        ForEach(workouts) { w in
+                            VStack(alignment: .leading, spacing: 12) {
+                                // Header: Category & Muscles
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text(w.category)
+                                            .font(.title3).bold()
+                                            .foregroundColor(.blue)
+                                        Text(w.muscleGroups.joined(separator: ", "))
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "dumbbell.fill")
+                                        .font(.largeTitle)
+                                        .foregroundColor(.blue.opacity(0.2))
+                                }
+                                .padding(.bottom, 5)
+                                
+                                Divider()
+                                
+                                // Exercise List
+                                if w.exercises.isEmpty {
+                                    Text("No exercises logged.")
+                                        .font(.caption).italic().foregroundColor(.secondary)
+                                } else {
+                                    ForEach(w.exercises) { exercise in
+                                        HStack {
+                                            VStack(alignment: .leading) {
+                                                Text(exercise.name).fontWeight(.medium)
+                                                if !exercise.note.isEmpty {
+                                                    Text(exercise.note).font(.caption2).foregroundColor(.secondary)
+                                                }
+                                            }
+                                            Spacer()
+                                            Text("\(exercise.reps) x \(exercise.weight, specifier: "%.1f")kg")
+                                                .font(.callout).monospacedDigit()
+                                        }
+                                        .padding(.vertical, 4)
+                                    }
+                                }
+                                
+                                if !w.note.isEmpty {
+                                    Divider()
+                                    Text("Note: \(w.note)")
+                                        .font(.caption).italic().foregroundColor(.secondary)
+                                }
+                            }
+                            .padding()
+                            .background(RoundedRectangle(cornerRadius: 12).fill(Color.blue.opacity(0.05)))
+                            .padding(.horizontal)
+                        }
                     }
                 }
             }

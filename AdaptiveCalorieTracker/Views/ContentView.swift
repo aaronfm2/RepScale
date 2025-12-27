@@ -34,9 +34,10 @@ struct ContentView: View {
                 List {
                     ForEach(logs) { log in
                         // --- NAVIGATION LINK ---
+                        // Update: Pass ALL workouts found for this date
                         NavigationLink(destination: LogDetailView(
                             log: log,
-                            workout: getWorkout(for: log.date)
+                            workouts: getWorkouts(for: log.date)
                         )) {
                             logRow(for: log)
                         }
@@ -71,7 +72,6 @@ struct ContentView: View {
                 updateTodayLog { $0.caloriesBurned = Int(newValue) }
             }
             .onChange(of: healthManager.caloriesConsumedToday) { _, newValue in
-                // Only update if HealthKit has data (> 0) to avoid wiping manual entries on launch if HK is slow
                 if newValue > 0 {
                     updateTodayLog { $0.caloriesConsumed = Int(newValue) }
                 }
@@ -91,15 +91,14 @@ struct ContentView: View {
                     updateTodayLog { $0.fat = Int(newValue) }
                 }
             }
-            // ------------------------------------
         }
     }
 
     // MARK: - Helper Methods
     
-    private func getWorkout(for date: Date) -> Workout? {
-        // Find workout on the same calendar day
-        workouts.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) })
+    // --- FIX: Return [Workout] instead of Workout? ---
+    private func getWorkouts(for date: Date) -> [Workout] {
+        workouts.filter { Calendar.current.isDate($0.date, inSameDayAs: date) }
     }
     
     private var logSheetContent: some View {
@@ -177,13 +176,11 @@ struct ContentView: View {
         
         if let existingLog = logs.first(where: { $0.date == logDate }) {
             if inputMode == 0 {
-                // Add mode: Append calories, but for macros we usually just overwrite or add if not nil
                 existingLog.caloriesConsumed += calVal
             } else {
                 existingLog.caloriesConsumed = calVal
             }
             
-            // Update macros if user typed something
             if pVal != nil { existingLog.protein = pVal }
             if cVal != nil { existingLog.carbs = cVal }
             if fVal != nil { existingLog.fat = fVal }
@@ -207,19 +204,15 @@ struct ContentView: View {
     
     private func setupOnAppear() {
         healthManager.requestAuthorization()
-        // Call the new method that fetches everything (Calories Burned + Nutrition)
         healthManager.fetchAllHealthData()
     }
     
-    // Generic helper to update Today's log safely
     private func updateTodayLog(update: (DailyLog) -> Void) {
         let todayDate = Calendar.current.startOfDay(for: Date())
         
         if let todayLog = logs.first(where: { $0.date == todayDate }) {
-            // Update existing log
             update(todayLog)
         } else {
-            // Create new log if it doesn't exist yet (e.g. first launch of the day)
             let newLog = DailyLog(date: todayDate, goalType: currentGoalType)
             update(newLog)
             modelContext.insert(newLog)
@@ -235,7 +228,6 @@ struct ContentView: View {
     @ViewBuilder
     private var summaryHeader: some View {
         if let today = logs.first(where: { Calendar.current.isDateInToday($0.date) }) {
-            // --- UPDATED LOGIC ---
             let burned = enableCaloriesBurned ? today.caloriesBurned : 0
             let remaining = dailyGoal + burned - today.caloriesConsumed
             
@@ -253,7 +245,7 @@ struct ContentView: View {
     }
     
     private func logRow(for log: DailyLog) -> some View {
-        let workout = getWorkout(for: log.date)
+        let dailyWorkouts = getWorkouts(for: log.date)
         
         return HStack {
             VStack(alignment: .leading, spacing: 4) {
@@ -265,7 +257,8 @@ struct ContentView: View {
                     if let goal = log.goalType {
                         Text("(\(goal))").font(.caption2).padding(2).background(Color.gray.opacity(0.1)).cornerRadius(4)
                     }
-                    if let w = workout {
+                    // --- FIX: Iterate over all workouts found ---
+                    ForEach(dailyWorkouts) { w in
                         Text("• \(w.category)").font(.caption2).foregroundColor(.blue)
                     }
                 }
@@ -278,7 +271,6 @@ struct ContentView: View {
                     Text("\(log.caloriesConsumed) kcal")
                 }.foregroundColor(.blue)
                 
-                // --- CONDITIONALLY SHOW BURNED ---
                 if enableCaloriesBurned {
                     HStack(spacing: 4) {
                         Image(systemName: "flame.fill").font(.caption2)
