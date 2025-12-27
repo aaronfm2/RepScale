@@ -5,7 +5,11 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \DailyLog.date, order: .reverse) private var logs: [DailyLog]
     
+    // Fetch workouts to link them to logs
     @Query(sort: \Workout.date, order: .reverse) private var workouts: [Workout]
+    
+    // --- NEW: Fetch Weight Entries to find the starting date ---
+    @Query(sort: \WeightEntry.date, order: .forward) private var weightEntries: [WeightEntry]
     
     @EnvironmentObject var healthManager: HealthManager
     
@@ -16,9 +20,12 @@ struct ContentView: View {
     // Sheet State
     @State private var showingLogSheet = false
     @State private var selectedLogDate = Date()
-    @State private var inputMode = 0 // 0 = Add, 1 = Set
+    @State private var inputMode = 0
     
     @State private var showingInfoAlert = false
+    
+    // Refresh State
+    @State private var isRefreshingHistory = false
     
     // Inputs
     @State private var caloriesInput = ""
@@ -26,22 +33,51 @@ struct ContentView: View {
     @State private var carbsInput = ""
     @State private var fatInput = ""
 
+    // MARK: - Computed Properties for Grouping
+    
+    struct LogSection: Identifiable {
+        var id: Date { month }
+        let month: Date
+        let logs: [DailyLog]
+    }
+    
+    var groupedSections: [LogSection] {
+        let grouped = Dictionary(grouping: logs) { log in
+            // Group by the first day of the month
+            Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: log.date))!
+        }
+        
+        // Sort months descending (newest first)
+        let sortedMonths = grouped.keys.sorted(by: >)
+        
+        return sortedMonths.map { month in
+            LogSection(month: month, logs: grouped[month]!)
+        }
+    }
+
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
                 summaryHeader
                 
                 List {
-                    ForEach(logs) { log in
-                        NavigationLink(destination: LogDetailView(
-                            log: log,
-                            workouts: getWorkouts(for: log.date)
-                        )) {
-                            logRow(for: log)
+                    ForEach(groupedSections) { section in
+                        Section(header: Text(section.month, format: .dateTime.month(.wide).year())) {
+                            ForEach(section.logs) { log in
+                                NavigationLink(destination: LogDetailView(
+                                    log: log,
+                                    workouts: getWorkouts(for: log.date)
+                                )) {
+                                    logRow(for: log)
+                                }
+                            }
+                            .onDelete { indexSet in
+                                deleteItems(at: indexSet, from: section.logs)
+                            }
                         }
                     }
-                    .onDelete(perform: deleteItems)
                 }
+                .listStyle(.insetGrouped)
             }
             .navigationTitle("Daily Logs")
             .toolbar {
@@ -52,17 +88,28 @@ struct ContentView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        selectedLogDate = Date()
-                        caloriesInput = ""
-                        proteinInput = ""
-                        carbsInput = ""
-                        fatInput = ""
-                        inputMode = 0
-                        showingLogSheet = true
-                    }) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title2)
+                    HStack {
+                        Button(action: refreshLast30Days) {
+                            if isRefreshingHistory {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                        }
+                        .disabled(isRefreshingHistory)
+                        
+                        Button(action: {
+                            selectedLogDate = Date()
+                            caloriesInput = ""
+                            proteinInput = ""
+                            carbsInput = ""
+                            fatInput = ""
+                            inputMode = 0
+                            showingLogSheet = true
+                        }) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title2)
+                        }
                     }
                 }
             }
@@ -72,16 +119,14 @@ struct ContentView: View {
             .alert("Apple Health Sync", isPresented: $showingInfoAlert) {
                 Button("OK", role: .cancel) { }
             } message: {
-                Text("Data syncs with Apple Health. Manual entries are added ON TOP of HealthKit data.")
+                Text("This data is automatically synced with Apple Health. Manual entries are added ON TOP of HealthKit data.")
             }
             .onAppear(perform: setupOnAppear)
-            
-            // --- UPDATED SYNC LOGIC: Preserves Manual Overrides ---
+            // Real-time sync for Today
             .onChange(of: healthManager.caloriesBurnedToday) { _, newValue in
                 updateTodayLog { $0.caloriesBurned = Int(newValue) }
             }
             .onChange(of: healthManager.caloriesConsumedToday) { _, newValue in
-                // Total = HealthKit Value + Manual Value
                 if newValue > 0 {
                     updateTodayLog { $0.caloriesConsumed = Int(newValue) + $0.manualCalories }
                 }
@@ -105,6 +150,58 @@ struct ContentView: View {
     }
 
     // MARK: - Helper Methods
+    
+    private func refreshLast30Days() {
+        isRefreshingHistory = true
+        
+        // 1. Get the date of the very first weight entry
+        // Since the query is sorted .forward, the first item is the oldest.
+        let firstWeightDate = weightEntries.first?.date
+        
+        Task {
+            let today = Calendar.current.startOfDay(for: Date())
+            
+            for i in 0..<30 {
+                guard let date = Calendar.current.date(byAdding: .day, value: -i, to: today) else { continue }
+                
+                // 2. CHECK: Is this date older than our first weight entry?
+                // If we have a first weight date, and the current 'date' is strictly before it (ignoring time), SKIP.
+                if let startLimit = firstWeightDate {
+                    let startOfDayLimit = Calendar.current.startOfDay(for: startLimit)
+                    // If date < startLimit, skip.
+                    if date < startOfDayLimit {
+                        continue
+                    }
+                }
+                
+                let data = await healthManager.fetchHistoricalHealthData(for: date)
+                
+                await MainActor.run {
+                    if let log = logs.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
+                        log.caloriesConsumed = Int(data.consumed) + log.manualCalories
+                        if enableCaloriesBurned { log.caloriesBurned = Int(data.burned) }
+                        
+                        log.protein = Int(data.protein) + log.manualProtein
+                        log.carbs = Int(data.carbs) + log.manualCarbs
+                        log.fat = Int(data.fat) + log.manualFat
+                        
+                    } else if data.consumed > 0 || data.burned > 0 {
+                        let newLog = DailyLog(date: date, goalType: currentGoalType)
+                        newLog.caloriesConsumed = Int(data.consumed)
+                        if enableCaloriesBurned { newLog.caloriesBurned = Int(data.burned) }
+                        newLog.protein = Int(data.protein)
+                        newLog.carbs = Int(data.carbs)
+                        newLog.fat = Int(data.fat)
+                        modelContext.insert(newLog)
+                    }
+                }
+            }
+            
+            await MainActor.run {
+                withAnimation { isRefreshingHistory = false }
+            }
+        }
+    }
     
     private func getWorkouts(for date: Date) -> [Workout] {
         workouts.filter { Calendar.current.isDate($0.date, inSameDayAs: date) }
@@ -182,7 +279,7 @@ struct ContentView: View {
         
         if let log = existingLog {
             if inputMode == 0 {
-                // ADD MODE: Simply increase manual values and total
+                // Add Mode
                 log.manualCalories += calVal
                 log.caloriesConsumed += calVal
                 
@@ -196,13 +293,11 @@ struct ContentView: View {
                 log.fat = (log.fat ?? 0) + fVal
                 
             } else {
-                // SET TOTAL MODE: Calculate difference and store as manual
-                // Assume (Total - Manual) = HealthKit Base
+                // Set Mode
                 let currentHKCalories = log.caloriesConsumed - log.manualCalories
                 log.manualCalories = calVal - currentHKCalories
                 log.caloriesConsumed = calVal
                 
-                // Only update macros if input provided
                 if !proteinInput.isEmpty {
                     let currentHKP = (log.protein ?? 0) - log.manualProtein
                     log.manualProtein = pVal - currentHKP
@@ -223,7 +318,7 @@ struct ContentView: View {
             if log.goalType == nil { log.goalType = currentGoalType }
             
         } else {
-            // New Log (No HealthKit data yet, so everything is manual)
+            // New Log
             let newLog = DailyLog(
                 date: logDate,
                 caloriesConsumed: calVal,
@@ -232,7 +327,6 @@ struct ContentView: View {
                 carbs: cVal,
                 fat: fVal
             )
-            // It's all manual since it wasn't fetched
             newLog.manualCalories = calVal
             newLog.manualProtein = pVal
             newLog.manualCarbs = cVal
@@ -248,13 +342,14 @@ struct ContentView: View {
         healthManager.requestAuthorization()
         healthManager.fetchAllHealthData()
         
-        // Sync logic on load
         if healthManager.caloriesConsumedToday > 0 {
             updateTodayLog { $0.caloriesConsumed = Int(healthManager.caloriesConsumedToday) + $0.manualCalories }
         }
+        
         if enableCaloriesBurned {
             updateTodayLog { $0.caloriesBurned = Int(healthManager.caloriesBurnedToday) }
         }
+        
         if healthManager.proteinToday > 0 { updateTodayLog { $0.protein = Int(healthManager.proteinToday) + $0.manualProtein } }
         if healthManager.carbsToday > 0 { updateTodayLog { $0.carbs = Int(healthManager.carbsToday) + $0.manualCarbs } }
         if healthManager.fatToday > 0 { updateTodayLog { $0.fat = Int(healthManager.fatToday) + $0.manualFat } }
@@ -262,6 +357,7 @@ struct ContentView: View {
     
     private func updateTodayLog(update: (DailyLog) -> Void) {
         let todayDate = Calendar.current.startOfDay(for: Date())
+        
         if let todayLog = logs.first(where: { $0.date == todayDate }) {
             update(todayLog)
         } else {
@@ -271,9 +367,12 @@ struct ContentView: View {
         }
     }
     
-    private func deleteItems(offsets: IndexSet) {
+    // Updated delete function to work with sections
+    private func deleteItems(at offsets: IndexSet, from sectionLogs: [DailyLog]) {
         withAnimation {
-            for index in offsets { modelContext.delete(logs[index]) }
+            for index in offsets {
+                modelContext.delete(sectionLogs[index])
+            }
         }
     }
     
@@ -302,8 +401,9 @@ struct ContentView: View {
         return HStack {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(log.date, style: .date).font(.body)
-                    // --- NEW: O Symbol for Overrides ---
+                    Text(log.date, format: .dateTime.day().month(.abbreviated).year())
+                        .font(.body)
+                    
                     if log.isOverridden {
                         Image(systemName: "o.circle.fill")
                             .font(.caption2)
@@ -318,6 +418,7 @@ struct ContentView: View {
                     if let goal = log.goalType {
                         Text("(\(goal))").font(.caption2).padding(2).background(Color.gray.opacity(0.1)).cornerRadius(4)
                     }
+                    
                     ForEach(dailyWorkouts) { w in
                         Text("• \(w.category)").font(.caption2).foregroundColor(.blue)
                     }
