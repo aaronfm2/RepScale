@@ -50,11 +50,11 @@ struct DefaultExercises {
         ExerciseDefinition(name: "Russian Twist", muscleGroups: ["Abs"]),
         
         // --- CARDIO ---
-        ExerciseDefinition(name: "Running", muscleGroups: ["Cardio", "Legs"], isCardio: true),
-        ExerciseDefinition(name: "Cycling", muscleGroups: ["Cardio", "Legs"], isCardio: true),
-        ExerciseDefinition(name: "Rowing", muscleGroups: ["Cardio", "Back", "Legs"], isCardio: true),
-        ExerciseDefinition(name: "Jump Rope", muscleGroups: ["Cardio", "Legs"], isCardio: true),
-        ExerciseDefinition(name: "Elliptical", muscleGroups: ["Cardio", "Legs"], isCardio: true)
+        ExerciseDefinition(name: "Running", muscleGroups: ["Cardio"], isCardio: true),
+        ExerciseDefinition(name: "Cycling", muscleGroups: ["Cardio"], isCardio: true),
+        ExerciseDefinition(name: "Rowing", muscleGroups: ["Cardio", "Back"], isCardio: true),
+        ExerciseDefinition(name: "Jump Rope", muscleGroups: ["Cardio"], isCardio: true),
+        ExerciseDefinition(name: "Swimming", muscleGroups: ["Cardio"], isCardio: true)
     ]
     
     /// Checks if defaults have been added. If not, adds them.

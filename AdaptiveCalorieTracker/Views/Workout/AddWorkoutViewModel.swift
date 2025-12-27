@@ -8,7 +8,14 @@ class AddWorkoutViewModel {
     
     // Form Data
     var date: Date = Date()
-    var category: String = "Push"
+    
+    // CHANGED: Added didSet to trigger muscle selection update
+    var category: String = "Push" {
+        didSet {
+            updateMusclesForCategory()
+        }
+    }
+    
     var selectedMuscles: Set<String> = []
     var note: String = ""
     var exercises: [ExerciseEntry] = []
@@ -41,6 +48,9 @@ class AddWorkoutViewModel {
             self.selectedMuscles = Set(workout.muscleGroups)
             self.note = workout.note
             self.exercises = workout.exercises
+        } else {
+            // CHANGED: For new workouts, set default muscles based on the initial category
+            updateMusclesForCategory()
         }
     }
     
@@ -59,6 +69,14 @@ class AddWorkoutViewModel {
     }
     
     // MARK: - Methods
+    
+    // CHANGED: New helper to sync muscles with category
+    private func updateMusclesForCategory() {
+        if let catEnum = WorkoutCategories(rawValue: category) {
+            let defaults = catEnum.muscleGroups.map { $0.rawValue }
+            self.selectedMuscles = Set(defaults)
+        }
+    }
     
     func deleteFromGroup(group: ExerciseGroup, at offsets: IndexSet) {
         let exercisesToDelete = offsets.map { group.exercises[$0] }
@@ -113,6 +131,8 @@ class AddWorkoutViewModel {
     
     func loadTemplate(_ template: WorkoutTemplate) {
         category = template.category
+        // Note: setting category triggers didSet, which might reset muscles.
+        // But we immediately overwrite them with the template's muscles below, which is desired.
         selectedMuscles = Set(template.muscleGroups)
         let newExercises = template.exercises.map { tex in
             ExerciseEntry(
