@@ -58,7 +58,7 @@ struct DashboardView: View {
                 Button("OK", role: .cancel) { }
             } message: {
                 //  (Average Calories * (Weight Change (kg) * 7700) / Number of days
-                Text("This is based on your weight change and your calories consumed over the last 30 days. Please note this number should only be used as a guide, the accuracy will be dependant on accuracy of calories submitted and small water weight fluctuations can impact this value")
+                Text("This is based on your weight change and your calories consumed over the last 30 days. Please note this number should only be used as a guide, the accuracy will be dependant on accuracy of calories submitted and small weight fluctuations can impact this value")
             }
             .onAppear(perform: setupOnAppear)
             // Add isCalorieCountingEnabled to change observers
