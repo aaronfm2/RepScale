@@ -5,49 +5,41 @@ import Charts
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     
-    // Fetch logs for calorie data
+    // ... [Keep existing Queries] ...
     @Query(sort: \DailyLog.date, order: .forward) private var logs: [DailyLog]
-    
-    // Fetch weights for the graph (Reverse order so first is latest)
     @Query(sort: \WeightEntry.date, order: .reverse) private var weights: [WeightEntry]
-    
-    // --- NEW: Fetch Workouts for the Breakdown Card ---
     @Query(sort: \Workout.date, order: .reverse) private var workouts: [Workout]
     
-    // --- CHANGED: Use the shared EnvironmentObject ---
     @EnvironmentObject var healthManager: HealthManager
-    
-    // --- VIEW MODEL ---
     @State private var viewModel = DashboardViewModel()
     
-    // --- APP STORAGE SETTINGS ---
+    // --- APP STORAGE ---
+    // ... [Keep existing AppStorage] ...
     @AppStorage("dailyCalorieGoal") private var dailyGoal: Int = 2000
-    @AppStorage("targetWeight") private var targetWeight: Double = 70.0
+    @AppStorage("targetWeight") private var targetWeight: Double = 70.0 // Stored in KG
     @AppStorage("goalType") private var goalType: String = "Cutting"
     @AppStorage("maintenanceCalories") private var maintenanceCalories: Int = 2500
     @AppStorage("estimationMethod") private var estimationMethod: Int = 0
     @AppStorage("enableCaloriesBurned") private var enableCaloriesBurned: Bool = true
+    @AppStorage("maintenanceTolerance") private var maintenanceTolerance: Double = 2.0 // Stored in KG
     
-    // --- NEW: Maintenance Tolerance ---
-    @AppStorage("maintenanceTolerance") private var maintenanceTolerance: Double = 2.0
+    // --- NEW: Unit System ---
+    @AppStorage("unitSystem") private var unitSystem: String = UnitSystem.metric.rawValue
     
     @State private var showingSettings = false
     @State private var showingMaintenanceInfo = false
+
+    // Helpers for Labels
+    var weightLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
+    var distLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "mi" : "km" }
 
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
-                    // 1. Progress to Target Calculation
                     targetProgressCard
-                    
-                    // 2. Weight Trend Graph
                     weightTrendCard
-                    
-                    // 3. Projection Comparison Graph
                     projectionComparisonCard
-                    
-                    // 4. Workout Category Breakdown (NEW)
                     workoutDistributionCard
                 }
                 .padding()
@@ -64,6 +56,7 @@ struct DashboardView: View {
             .sheet(isPresented: $showingSettings) {
                 settingsSheet
             }
+            // ... [Keep existing alerts and onAppear] ...
             .alert("About Estimated Maintenance", isPresented: $showingMaintenanceInfo) {
                 Button("OK", role: .cancel) { }
             } message: {
@@ -80,7 +73,7 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: - Logic / ViewModel Binding
+    // ... [refreshViewModel and checkGoalReached remain unchanged] ...
     private func refreshViewModel() {
         let settings = DashboardSettings(
             dailyGoal: dailyGoal,
@@ -90,18 +83,15 @@ struct DashboardView: View {
             estimationMethod: estimationMethod,
             enableCaloriesBurned: enableCaloriesBurned
         )
-        
         viewModel.updateMetrics(logs: logs, weights: weights, settings: settings)
     }
     
-    // Helper to calculate goal status
     private func checkGoalReached(current: Double) -> Bool {
         if goalType == GoalType.cutting.rawValue {
             return current <= targetWeight
         } else if goalType == GoalType.bulking.rawValue {
             return current >= targetWeight
         } else {
-            // Maintenance Logic: Check if within tolerance
             let diff = abs(current - targetWeight)
             return diff <= maintenanceTolerance
         }
@@ -109,82 +99,67 @@ struct DashboardView: View {
 
     // MARK: - Progress Card
     private var targetProgressCard: some View {
-        let currentWeight = weights.first?.weight
+        let currentWeightKg = weights.first?.weight
+        // Convert for display
+        let currentDisplay = currentWeightKg?.toUserWeight(system: unitSystem)
+        let targetDisplay = targetWeight.toUserWeight(system: unitSystem)
+        let toleranceDisplay = maintenanceTolerance.toUserWeight(system: unitSystem)
         
         return VStack(spacing: 12) {
-            
-            if let current = currentWeight, current > 0 {
+            if let current = currentDisplay, let rawCurrent = currentWeightKg, rawCurrent > 0 {
                 VStack(spacing: 4) {
-                    Text("Current Weight: \(current, specifier: "%.1f") kg")
+                    Text("Current Weight: \(current, specifier: "%.1f") \(weightLabel)")
                         .font(.title3)
                         .fontWeight(.semibold)
                     
-                    Text("Goal: \(targetWeight, specifier: "%.1f") kg (\(goalType))")
+                    Text("Goal: \(targetDisplay, specifier: "%.1f") \(weightLabel) (\(goalType))")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
                 
-                if checkGoalReached(current: current) {
+                if checkGoalReached(current: rawCurrent) {
                     Text("Target Reached!")
                         .font(.title).bold()
                         .foregroundColor(.green)
                     
                     if goalType == GoalType.maintenance.rawValue {
-                        Text("Within \(maintenanceTolerance, specifier: "%.1f")kg of goal")
+                        Text("Within \(toleranceDisplay, specifier: "%.1f") \(weightLabel) of goal")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 } else {
-                    // Use ViewModel Data
+                    // ... [Keep existing ViewModel logic] ...
                     if let daysLeft = viewModel.daysRemaining {
                         Text("\(daysLeft)")
                             .font(.system(size: 60, weight: .bold))
                             .foregroundColor(.orange)
                         Text("Days until target hit")
                             .font(.headline)
-                        
                         Text(viewModel.logicDescription)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.top, 4)
+                            .font(.caption).foregroundColor(.secondary).padding(.top, 4)
                     } else {
                         Divider().padding(.vertical, 5)
-                        
-                        Text("Estimate Unavailable")
-                            .font(.title3).bold()
+                        Text("Estimate Unavailable").font(.title3).bold()
                         Text(viewModel.progressWarningMessage)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
+                            .font(.caption).foregroundColor(.secondary).multilineTextAlignment(.center).padding(.horizontal)
                     }
                     
-                    // --- Estimated Maintenance (From ViewModel) ---
                     if let estMaint = viewModel.estimatedMaintenance {
                         Divider().padding(.vertical, 8)
-                        
                         HStack(spacing: 6) {
                             Text("Your estimated Maintenance calories: \(estMaint)")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            
+                                .font(.subheadline).fontWeight(.medium)
                             Button(action: { showingMaintenanceInfo = true }) {
-                                Image(systemName: "info.circle")
-                                    .foregroundColor(.blue)
+                                Image(systemName: "info.circle").foregroundColor(.blue)
                             }
                         }
                     }
                 }
             } else {
-                Text("\(goalType): \(targetWeight, specifier: "%.1f") kg")
+                Text("\(goalType): \(targetDisplay, specifier: "%.1f") \(weightLabel)")
                     .font(.subheadline).foregroundColor(.secondary)
-                
-                Text("No Weight Data")
-                    .font(.title3).bold()
-                    .foregroundColor(.secondary)
-                Text("Log your weight in the Weight tab")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Text("No Weight Data").font(.title3).bold().foregroundColor(.secondary)
+                Text("Log your weight in the Weight tab").font(.caption).foregroundColor(.secondary)
             }
         }
         .frame(maxWidth: .infinity)
@@ -194,34 +169,36 @@ struct DashboardView: View {
 
     // MARK: - Projection Graph
     private var projectionComparisonCard: some View {
-        let currentWeight = weights.first?.weight ?? 0
-        let projections = viewModel.projectionPoints
+        let currentWeightKg = weights.first?.weight ?? 0
+        let currentDisplay = currentWeightKg.toUserWeight(system: unitSystem)
+        let targetDisplay = targetWeight.toUserWeight(system: unitSystem)
+        let toleranceDisplay = maintenanceTolerance.toUserWeight(system: unitSystem)
         
-        let allValues = projections.map { $0.weight } + [currentWeight, targetWeight]
+        // Convert all projection points
+        let projections = viewModel.projectionPoints.map { point in
+            ProjectionPoint(date: point.date, weight: point.weight.toUserWeight(system: unitSystem), method: point.method)
+        }
+        
+        let allValues = projections.map { $0.weight } + [currentDisplay, targetDisplay]
         let minW = allValues.min() ?? 0
         let maxW = allValues.max() ?? 100
-        let lowerBound = max(0, minW - 1.5)
-        let upperBound = maxW + 1.5
+        let lowerBound = max(0, minW - 5)
+        let upperBound = maxW + 5
         
         return VStack(alignment: .leading) {
-            Text("Projections").font(.headline)
+            Text("Projections (\(weightLabel))").font(.headline)
             Text("Estimated weight over the next 60 days").font(.caption).foregroundColor(.secondary)
             
-            if currentWeight > 0 {
+            if currentWeightKg > 0 {
                 Chart {
-                    RuleMark(y: .value("Target", targetWeight))
+                    RuleMark(y: .value("Target", targetDisplay))
                         .foregroundStyle(.green)
                         .lineStyle(StrokeStyle(lineWidth: 2, dash: [5]))
-                        .annotation(position: .topLeading, alignment: .leading) {
-                            Text("Goal: \(targetWeight, specifier: "%.1f")")
-                                .font(.caption2).bold().foregroundColor(.green)
-                        }
                     
-                    // Show maintenance boundaries if applicable
                     if goalType == GoalType.maintenance.rawValue {
-                        RuleMark(y: .value("Upper", targetWeight + maintenanceTolerance))
+                        RuleMark(y: .value("Upper", targetDisplay + toleranceDisplay))
                             .foregroundStyle(.green.opacity(0.3))
-                        RuleMark(y: .value("Lower", targetWeight - maintenanceTolerance))
+                        RuleMark(y: .value("Lower", targetDisplay - toleranceDisplay))
                             .foregroundStyle(.green.opacity(0.3))
                     }
 
@@ -255,16 +232,18 @@ struct DashboardView: View {
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
     }
     
-    // MARK: - Graphs
+    // MARK: - Weight Trend Graph
     private var weightTrendCard: some View {
-        let allWeights = weights.map { $0.weight }
+        // Convert history
+        let history = weights.map { (date: $0.date, weight: $0.weight.toUserWeight(system: unitSystem)) }
+        let allWeights = history.map { $0.weight }
         let minW = allWeights.min() ?? 0
         let maxW = allWeights.max() ?? 100
-        let lowerBound = max(0, minW - 1.0)
-        let upperBound = maxW + 1.0
+        let lowerBound = max(0, minW - 5)
+        let upperBound = maxW + 5
         
         return VStack(alignment: .leading) {
-            Text("Weight History").font(.headline)
+            Text("Weight History (\(weightLabel))").font(.headline)
             
             if weights.isEmpty {
                 Text("No weight data logged yet")
@@ -272,10 +251,10 @@ struct DashboardView: View {
                     .frame(maxWidth: .infinity, alignment: .center).padding()
             } else {
                 Chart {
-                    ForEach(weights.sorted(by: { $0.date < $1.date })) { entry in
+                    ForEach(history.sorted(by: { $0.date < $1.date }), id: \.date) { item in
                         LineMark(
-                            x: .value("Date", entry.date),
-                            y: .value("Weight", entry.weight)
+                            x: .value("Date", item.date),
+                            y: .value("Weight", item.weight)
                         )
                         .interpolationMethod(.catmullRom)
                         .foregroundStyle(.blue)
@@ -298,17 +277,12 @@ struct DashboardView: View {
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
     }
     
-    // MARK: - NEW: Workout Breakdown Card
+    // ... [workoutDistributionCard remains unchanged] ...
     private var workoutDistributionCard: some View {
-        // Filter logic: Last 30 days
+        // (Copy previous implementation, no units involved here)
         let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
         let recentWorkouts = workouts.filter { $0.date >= thirtyDaysAgo }
-        
-        // Group by category and count
-        let counts = Dictionary(grouping: recentWorkouts, by: { $0.category })
-            .mapValues { $0.count }
-        
-        // Prepare data for Chart
+        let counts = Dictionary(grouping: recentWorkouts, by: { $0.category }).mapValues { $0.count }
         let data = counts.sorted(by: { $0.value > $1.value }).map { (cat: $0.key, count: $0.value) }
 
         return VStack(alignment: .leading) {
@@ -317,46 +291,26 @@ struct DashboardView: View {
                 Spacer()
                 Text("Last 30 Days").font(.caption).foregroundColor(.secondary)
             }
-            
             if data.isEmpty {
-                Text("No workouts logged recently.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
+                Text("No workouts logged recently.").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .center).padding()
             } else {
                 HStack(spacing: 20) {
-                    // Donut Chart
                     Chart(data, id: \.cat) { item in
-                        SectorMark(
-                            angle: .value("Count", item.count),
-                            innerRadius: .ratio(0.6),
-                            angularInset: 2
-                        )
-                        .cornerRadius(5)
-                        .foregroundStyle(byCategoryColor(item.cat)) // Apply Manual Color
+                        SectorMark(angle: .value("Count", item.count), innerRadius: .ratio(0.6), angularInset: 2)
+                            .cornerRadius(5)
+                            .foregroundStyle(byCategoryColor(item.cat))
                     }
-                    .frame(height: 150)
-                    .frame(maxWidth: 150)
-                    
-                    // Custom Legend
+                    .frame(height: 150).frame(maxWidth: 150)
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(data, id: \.cat) { item in
                             HStack {
-                                Circle()
-                                    .fill(byCategoryColor(item.cat))
-                                    .frame(width: 8, height: 8)
-                                Text(item.cat)
-                                    .font(.caption)
-                                    .foregroundColor(.primary)
+                                Circle().fill(byCategoryColor(item.cat)).frame(width: 8, height: 8)
+                                Text(item.cat).font(.caption).foregroundColor(.primary)
                                 Spacer()
-                                Text("\(item.count)")
-                                    .font(.caption).bold()
-                                    .foregroundColor(.secondary)
+                                Text("\(item.count)").font(.caption).bold().foregroundColor(.secondary)
                             }
                         }
-                    }
-                    .frame(maxWidth: .infinity)
+                    }.frame(maxWidth: .infinity)
                 }
             }
         }
@@ -364,7 +318,6 @@ struct DashboardView: View {
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
     }
     
-    // Helper for coloring
     private func byCategoryColor(_ cat: String) -> Color {
         switch cat.lowercased() {
         case "push": return .red
@@ -382,6 +335,15 @@ struct DashboardView: View {
     private var settingsSheet: some View {
         NavigationView {
             Form {
+                // --- NEW: Unit Section ---
+                Section("Preferences") {
+                    Picker("Unit System", selection: $unitSystem) {
+                        ForEach(UnitSystem.allCases, id: \.self) { system in
+                            Text(system.rawValue).tag(system.rawValue)
+                        }
+                    }
+                }
+                
                 Section("Goal Settings") {
                     Picker("Goal Type", selection: $goalType) {
                         ForEach(GoalType.allCases, id: \.self) { type in
@@ -391,20 +353,29 @@ struct DashboardView: View {
                     .pickerStyle(.segmented)
                     .padding(.vertical, 5)
 
+                    // Custom Binding for Target Weight to handle conversion
+                    let targetWeightBinding = Binding<Double>(
+                        get: { targetWeight.toUserWeight(system: unitSystem) },
+                        set: { targetWeight = $0.toStoredWeight(system: unitSystem) }
+                    )
+                    
                     HStack {
-                        Text(goalType == GoalType.maintenance.rawValue ? "Maintenance Weight (kg)" : "Target Weight (kg)")
+                        Text(goalType == GoalType.maintenance.rawValue ? "Maintenance Weight (\(weightLabel))" : "Target Weight (\(weightLabel))")
                         Spacer()
-                        TextField("kg", value: $targetWeight, format: .number)
+                        TextField("0.0", value: targetWeightBinding, format: .number)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                     }
                     
-                    // --- NEW: Maintenance Tolerance Setting ---
                     if goalType == GoalType.maintenance.rawValue {
+                        let toleranceBinding = Binding<Double>(
+                            get: { maintenanceTolerance.toUserWeight(system: unitSystem) },
+                            set: { maintenanceTolerance = $0.toStoredWeight(system: unitSystem) }
+                        )
                         HStack {
-                            Text("Tolerance (+/- kg)")
+                            Text("Tolerance (+/- \(weightLabel))")
                             Spacer()
-                            TextField("kg", value: $maintenanceTolerance, format: .number)
+                            TextField("0.0", value: toleranceBinding, format: .number)
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
                         }
@@ -450,13 +421,11 @@ struct DashboardView: View {
 
     private func setupOnAppear() {
         healthManager.fetchAllHealthData()
-        
         let today = Calendar.current.startOfDay(for: Date())
         if !logs.contains(where: { $0.date == today }) {
             let newItem = DailyLog(date: today, goalType: goalType)
             modelContext.insert(newItem)
         }
-        
         refreshViewModel()
     }
 }

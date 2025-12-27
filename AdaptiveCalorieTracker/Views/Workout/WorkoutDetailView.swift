@@ -4,6 +4,12 @@ struct WorkoutDetailView: View {
     let workout: Workout
     @State private var isEditing = false
     
+    // --- NEW: Unit System ---
+    @AppStorage("unitSystem") private var unitSystem: String = UnitSystem.metric.rawValue
+    
+    var weightLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
+    var distLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "mi" : "km" }
+    
     // Helper to group exercises by name while keeping order
     var groupedExercises: [(name: String, sets: [ExerciseEntry])] {
         var groups: [(name: String, sets: [ExerciseEntry])] = []
@@ -70,7 +76,8 @@ struct WorkoutDetailView: View {
                                         if exercise.isCardio {
                                             HStack(spacing: 8) {
                                                 if let dist = exercise.distance, dist > 0 {
-                                                    Text("\(dist, specifier: "%.2f") km")
+                                                    // Convert distance for display
+                                                    Text("\(dist.toUserDistance(system: unitSystem), specifier: "%.2f") \(distLabel)")
                                                 }
                                                 if let time = exercise.duration, time > 0 {
                                                     Text("\(Int(time)) min")
@@ -78,19 +85,21 @@ struct WorkoutDetailView: View {
                                             }
                                             .font(.callout).monospacedDigit().foregroundColor(.blue)
                                         } else {
-                                            Text("\(exercise.reps ?? 0) x \(exercise.weight ?? 0.0, specifier: "%.1f") kg")
+                                            // Convert weight for display
+                                            let displayWeight = (exercise.weight ?? 0.0).toUserWeight(system: unitSystem)
+                                            
+                                            Text("\(exercise.reps ?? 0) x \(displayWeight, specifier: "%.1f") \(weightLabel)")
                                                 .monospacedDigit()
                                         }
                                         
                                         Spacer()
                                     }
                                     
-                                    // --- CHANGED: Display note text here ---
                                     if !exercise.note.isEmpty {
                                         Text(exercise.note)
                                             .font(.caption)
                                             .foregroundColor(.secondary)
-                                            .padding(.leading, 50) // Indent to align with details
+                                            .padding(.leading, 50)
                                     }
                                 }
                                 .padding(.vertical, 2)

@@ -8,10 +8,13 @@ struct OnboardingView: View {
     // --- Step Control ---
     @State private var currentStep = 0
     
+    // --- NEW: Unit System Preference ---
+    @AppStorage("unitSystem") private var unitSystem: String = UnitSystem.metric.rawValue
+    
     // --- User Inputs ---
     @State private var gender: Gender = .male
     
-    // CHANGED: Optionals allow the fields to be blank/empty initially
+    // Optionals allow the fields to be blank/empty initially
     @State private var currentWeight: Double? = nil
     @State private var targetWeight: Double? = nil
     
@@ -36,6 +39,16 @@ struct OnboardingView: View {
     enum Gender: String, CaseIterable {
         case male = "Male"
         case female = "Female"
+    }
+    
+    // Helper for Labels
+    var unitLabel: String {
+        return unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg"
+    }
+    
+    // Helper to get KG value for internal logic/storage
+    func toKg(_ value: Double) -> Double {
+        return unitSystem == UnitSystem.imperial.rawValue ? value / 2.20462 : value
     }
     
     var body: some View {
@@ -75,7 +88,6 @@ struct OnboardingView: View {
                             }
                         }
                         .buttonStyle(.borderedProminent)
-                        // CHANGED: Disable Next if the required field for the step is empty
                         .disabled(cannotMoveForward)
                     } else {
                         Button("Get Started") {
@@ -114,6 +126,16 @@ struct OnboardingView: View {
     
     var biometricsStep: some View {
         Form {
+            Section(header: Text("Preferences")) {
+                // --- NEW: Unit Selection ---
+                Picker("Units", selection: $unitSystem) {
+                    ForEach(UnitSystem.allCases, id: \.self) { system in
+                        Text(system.rawValue).tag(system.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+            
             Section(header: Text("Biometrics")) {
                 Picker("Gender", selection: $gender) {
                     ForEach(Gender.allCases, id: \.self) { g in
@@ -123,9 +145,8 @@ struct OnboardingView: View {
                 .pickerStyle(.segmented)
                 
                 HStack {
-                    Text("Current Weight (kg)")
+                    Text("Current Weight (\(unitLabel))")
                     Spacer()
-                    // CHANGED: Placeholder will show because value can be nil
                     TextField("Required", value: $currentWeight, format: .number)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
@@ -141,9 +162,8 @@ struct OnboardingView: View {
             Section(header: Text("Your Goal")) {
                 // 1. Target Weight Input
                 HStack {
-                    Text("Target Weight (kg)")
+                    Text("Target Weight (\(unitLabel))")
                     Spacer()
-                    // CHANGED: Placeholder will show because value can be nil
                     TextField("Required", value: $targetWeight, format: .number)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
@@ -266,9 +286,7 @@ struct OnboardingView: View {
     // MARK: - Logic
     
     func determineGoalType() {
-        // CHANGED: safely unwrap values
         guard let tWeight = targetWeight, let cWeight = currentWeight else {
-            // Default to maintenance if incomplete
             goalType = .maintenance
             return
         }
@@ -292,12 +310,14 @@ struct OnboardingView: View {
     
     /// 1. Estimate Maintenance based on weight/gender
     func estimateMaintenance() {
-        // CHANGED: safely unwrap
         guard let cWeight = currentWeight else { return }
         
-        // Multiplier: Male ~32, Female ~29
+        // --- UPDATED: Convert to KG if needed ---
+        let weightKg = toKg(cWeight)
+        
+        // Multiplier: Male ~32, Female ~29 (Formula assumes KG)
         let multiplier: Double = (gender == .male) ? 32.0 : 29.0
-        let estimated = Int(cWeight * multiplier)
+        let estimated = Int(weightKg * multiplier)
         maintenanceInput = String(estimated)
     }
     
@@ -305,8 +325,11 @@ struct OnboardingView: View {
     func calculateGoalFromDate() {
         guard !knowsDetails else { return }
         guard let maintenance = Int(maintenanceInput) else { return }
-        // CHANGED: safely unwrap
         guard let tWeight = targetWeight, let cWeight = currentWeight else { return }
+        
+        // --- UPDATED: Convert to KG for calculation ---
+        let currentKg = toKg(cWeight)
+        let targetKg = toKg(tWeight)
         
         let today = Calendar.current.startOfDay(for: Date())
         let target = Calendar.current.startOfDay(for: targetDate)
@@ -315,14 +338,13 @@ struct OnboardingView: View {
         let components = Calendar.current.dateComponents([.day], from: today, to: target)
         let days = components.day ?? 1
         
-        // Avoid division by zero or negative days
         guard days > 0 else {
             dailyGoalInput = String(maintenance)
             return
         }
         
         // Total change needed (kg)
-        let weightDiff = tWeight - cWeight
+        let weightDiff = targetKg - currentKg
         
         // Total Calories (7700 kcal per kg)
         let totalCaloriesNeeded = weightDiff * 7700.0
@@ -336,19 +358,22 @@ struct OnboardingView: View {
     }
     
     func completeOnboarding() {
-        // CHANGED: Final check to ensure we have values before saving
         guard let finalCurrent = currentWeight, let finalTarget = targetWeight else { return }
+        
+        // --- UPDATED: Convert to KG for Storage ---
+        let storedCurrentWeightKg = toKg(finalCurrent)
+        let storedTargetWeightKg = toKg(finalTarget)
         
         // Save Settings
         storedGoalType = goalType.rawValue
-        storedTargetWeight = finalTarget
+        storedTargetWeight = storedTargetWeightKg
         storedEnableCaloriesBurned = trackCaloriesBurned
         
         storedMaintenance = Int(maintenanceInput) ?? 2500
         storedDailyGoal = Int(dailyGoalInput) ?? 2000
         
-        // Save Starting Weight
-        let firstEntry = WeightEntry(date: Date(), weight: finalCurrent)
+        // Save Starting Weight (as KG)
+        let firstEntry = WeightEntry(date: Date(), weight: storedCurrentWeightKg)
         modelContext.insert(firstEntry)
         
         // Finish

@@ -9,6 +9,9 @@ struct AddWorkoutView: View {
     // Fetch templates for the "Load Template" sheet
     @Query(sort: \WorkoutTemplate.name) private var templates: [WorkoutTemplate]
     
+    // --- NEW: Unit System Preference ---
+    @AppStorage("unitSystem") private var unitSystem: String = UnitSystem.metric.rawValue
+    
     // The workout we are editing (if any)
     let workoutToEdit: Workout?
     
@@ -143,7 +146,8 @@ extension AddWorkoutView {
             ForEach(viewModel.groupedExercises, id: \.name) { group in
                 Section {
                     ForEach(Array(group.exercises.enumerated()), id: \.element) { index, ex in
-                        EditExerciseRow(exercise: ex, index: index)
+                        // --- UPDATED: Pass unitSystem to the row ---
+                        EditExerciseRow(exercise: ex, index: index, unitSystem: unitSystem)
                             .swipeActions(edge: .leading) {
                                 Button {
                                     viewModel.duplicateExercise(ex)
@@ -325,8 +329,26 @@ struct EditExerciseRow: View {
     @Bindable var exercise: ExerciseEntry
     let index: Int
     
+    // --- NEW: Unit System injected from parent ---
+    let unitSystem: String
+    
+    // Computed labels
+    var weightLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
+    var distLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "mi" : "km" }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        // --- Custom Bindings for Conversion ---
+        let weightBinding = Binding<Double?>(
+            get: { exercise.weight?.toUserWeight(system: unitSystem) },
+            set: { exercise.weight = $0?.toStoredWeight(system: unitSystem) }
+        )
+        
+        let distBinding = Binding<Double?>(
+            get: { exercise.distance?.toUserDistance(system: unitSystem) },
+            set: { exercise.distance = $0?.toStoredDistance(system: unitSystem) }
+        )
+        
+        return VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text("Set \(index + 1)")
                     .font(.caption)
@@ -338,11 +360,14 @@ struct EditExerciseRow: View {
                 
                 if exercise.isCardio {
                     HStack {
-                        TextField("Dist", value: $exercise.distance, format: .number)
+                        // Use distBinding and distLabel
+                        TextField("Dist", value: distBinding, format: .number)
                             .keyboardType(.decimalPad)
                             .frame(width: 60)
-                        Text("km")
+                        Text(distLabel)
+                        
                         Spacer()
+                        
                         TextField("Time", value: $exercise.duration, format: .number)
                             .keyboardType(.numberPad)
                             .frame(width: 60)
@@ -365,7 +390,8 @@ struct EditExerciseRow: View {
                         Text("x").foregroundColor(.secondary)
                         Spacer()
                         
-                        TextField("Weight", value: $exercise.weight, format: .number)
+                        // Use weightBinding and weightLabel
+                        TextField("Weight", value: weightBinding, format: .number)
                             .keyboardType(.decimalPad)
                             .frame(width: 60)
                             .multilineTextAlignment(.trailing)
@@ -373,7 +399,7 @@ struct EditExerciseRow: View {
                             .background(Color.gray.opacity(0.1))
                             .cornerRadius(5)
                         
-                        Text("kg").font(.caption).foregroundColor(.secondary)
+                        Text(weightLabel).font(.caption).foregroundColor(.secondary)
                     }
                 }
             }

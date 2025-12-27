@@ -1,6 +1,29 @@
-// AdaptiveCalorieTracker/Models/Enums.swift
-
 import Foundation
+
+// MARK: - Unit System
+enum UnitSystem: String, CaseIterable, Codable {
+    case metric = "Metric"
+    case imperial = "Imperial"
+}
+
+// MARK: - Extensions for Conversion
+extension Double {
+    func toUserWeight(system: String) -> Double {
+        return system == UnitSystem.imperial.rawValue ? self * 2.20462 : self
+    }
+    
+    func toStoredWeight(system: String) -> Double {
+        return system == UnitSystem.imperial.rawValue ? self / 2.20462 : self
+    }
+    
+    func toUserDistance(system: String) -> Double {
+        return system == UnitSystem.imperial.rawValue ? self * 0.621371 : self
+    }
+    
+    func toStoredDistance(system: String) -> Double {
+        return system == UnitSystem.imperial.rawValue ? self / 0.621371 : self
+    }
+}
 
 // MARK: - Workout Categories
 
