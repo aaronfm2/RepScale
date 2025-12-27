@@ -11,6 +11,9 @@ struct DashboardView: View {
     // Fetch weights for the graph (Reverse order so first is latest)
     @Query(sort: \WeightEntry.date, order: .reverse) private var weights: [WeightEntry]
     
+    // --- NEW: Fetch Workouts for the Breakdown Card ---
+    @Query(sort: \Workout.date, order: .reverse) private var workouts: [Workout]
+    
     // --- CHANGED: Use the shared EnvironmentObject ---
     @EnvironmentObject var healthManager: HealthManager
     
@@ -38,14 +41,14 @@ struct DashboardView: View {
                     // 1. Progress to Target Calculation
                     targetProgressCard
                     
-                    // 2. Projection Comparison Graph
-                    projectionComparisonCard
-                    
-                    // 3. Weight Trend Graph
+                    // 2. Weight Trend Graph
                     weightTrendCard
                     
-                    // 4. Calorie Balance Graph (Last 7 Days)
-                    calorieBalanceCard
+                    // 3. Projection Comparison Graph
+                    projectionComparisonCard
+                    
+                    // 4. Workout Category Breakdown (NEW)
+                    workoutDistributionCard
                 }
                 .padding()
             }
@@ -91,7 +94,7 @@ struct DashboardView: View {
         viewModel.updateMetrics(logs: logs, weights: weights, settings: settings)
     }
     
-    // Helper to calculate goal status (Fixes the compiler error)
+    // Helper to calculate goal status
     private func checkGoalReached(current: Double) -> Bool {
         if goalType == GoalType.cutting.rawValue {
             return current <= targetWeight
@@ -121,7 +124,6 @@ struct DashboardView: View {
                         .foregroundColor(.secondary)
                 }
                 
-                // --- FIX: Logic moved to function call inside if statement ---
                 if checkGoalReached(current: current) {
                     Text("Target Reached!")
                         .font(.title).bold()
@@ -296,25 +298,84 @@ struct DashboardView: View {
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
     }
     
-    private var calorieBalanceCard: some View {
-        VStack(alignment: .leading) {
-            Text(enableCaloriesBurned ? "Net Calories (Last 7 Days)" : "Calories Consumed (Last 7 Days)")
-                .font(.headline)
+    // MARK: - NEW: Workout Breakdown Card
+    private var workoutDistributionCard: some View {
+        // Filter logic: Last 30 days
+        let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
+        let recentWorkouts = workouts.filter { $0.date >= thirtyDaysAgo }
+        
+        // Group by category and count
+        let counts = Dictionary(grouping: recentWorkouts, by: { $0.category })
+            .mapValues { $0.count }
+        
+        // Prepare data for Chart
+        let data = counts.sorted(by: { $0.value > $1.value }).map { (cat: $0.key, count: $0.value) }
+
+        return VStack(alignment: .leading) {
+            HStack {
+                Text("Workout Focus").font(.headline)
+                Spacer()
+                Text("Last 30 Days").font(.caption).foregroundColor(.secondary)
+            }
             
-            Chart {
-                ForEach(logs.suffix(7)) { log in
-                    let val = enableCaloriesBurned ? log.netCalories : log.caloriesConsumed
-                    BarMark(
-                        x: .value("Day", log.date, unit: .day),
-                        y: .value("Net", val)
-                    )
-                    .foregroundStyle(val > 0 ? .red : .green)
+            if data.isEmpty {
+                Text("No workouts logged recently.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
+            } else {
+                HStack(spacing: 20) {
+                    // Donut Chart
+                    Chart(data, id: \.cat) { item in
+                        SectorMark(
+                            angle: .value("Count", item.count),
+                            innerRadius: .ratio(0.6),
+                            angularInset: 2
+                        )
+                        .cornerRadius(5)
+                        .foregroundStyle(byCategoryColor(item.cat)) // Apply Manual Color
+                    }
+                    .frame(height: 150)
+                    .frame(maxWidth: 150)
+                    
+                    // Custom Legend
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(data, id: \.cat) { item in
+                            HStack {
+                                Circle()
+                                    .fill(byCategoryColor(item.cat))
+                                    .frame(width: 8, height: 8)
+                                Text(item.cat)
+                                    .font(.caption)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Text("\(item.count)")
+                                    .font(.caption).bold()
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
                 }
             }
-            .frame(height: 150)
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
+    }
+    
+    // Helper for coloring
+    private func byCategoryColor(_ cat: String) -> Color {
+        switch cat.lowercased() {
+        case "push": return .red
+        case "pull": return .blue
+        case "legs": return .green
+        case "cardio": return .orange
+        case "full body": return .purple
+        case "upper": return .teal
+        case "lower": return .brown
+        default: return .gray
+        }
     }
 
     // MARK: - Settings Sheet
