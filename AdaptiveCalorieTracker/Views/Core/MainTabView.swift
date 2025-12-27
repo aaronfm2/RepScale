@@ -57,7 +57,7 @@ struct MainTabView: View {
             title: "Workouts Tab",
             description: "Track your training sessions, view history, and manage your exercise library.",
             tabIndex: 2,
-            highlights: [.tab(index: 2)] // Changed from .center
+            highlights: [.tab(index: 2), .tab(index: 2)] // Changed from .center
         ),
         // 6. Workouts -> Highlights Top Controls
         TutorialStep(
