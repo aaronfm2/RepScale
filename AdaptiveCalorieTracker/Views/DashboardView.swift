@@ -102,7 +102,7 @@ struct DashboardView: View {
                 }
                 
                 // Determine if the goal is reached
-                let isGoalReached = goalType == "Cutting" ? current <= targetWeight : current >= targetWeight
+                let isGoalReached = goalType == GoalType.cutting.rawValue ? current <= targetWeight : current >= targetWeight
                 
                 if isGoalReached {
                     Text("Target Reached!")
@@ -291,8 +291,9 @@ struct DashboardView: View {
             Form {
                 Section("Goal Settings") {
                     Picker("Goal Type", selection: $goalType) {
-                        Text("Cutting (Lose Weight)").tag("Cutting")
-                        Text("Bulking (Gain Weight)").tag("Bulking")
+                        ForEach(GoalType.allCases, id: \.self) { type in
+                            Text(type.rawValue).tag(type.rawValue)
+                        }
                     }
                     .pickerStyle(.segmented)
                     .padding(.vertical, 5)

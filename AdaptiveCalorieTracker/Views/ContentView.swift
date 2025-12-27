@@ -10,7 +10,7 @@ struct ContentView: View {
     
     @StateObject var healthManager = HealthManager()
     @AppStorage("dailyCalorieGoal") private var dailyGoal: Int = 2000
-    @AppStorage("goalType") private var currentGoalType: String = "Cutting"
+    @AppStorage("goalType") private var currentGoalType: String = GoalType.cutting.rawValue
     
     // --- NEW TOGGLE ---
     @AppStorage("enableCaloriesBurned") private var enableCaloriesBurned: Bool = true

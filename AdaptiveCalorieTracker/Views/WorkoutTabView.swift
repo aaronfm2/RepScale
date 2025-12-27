@@ -330,22 +330,23 @@ struct MuscleSelectionView: View {
     @Binding var selectedMusclesString: String
     @Environment(\.dismiss) var dismiss
     
-    let allMuscles = ["Chest", "Back", "Legs", "Shoulders", "Biceps", "Triceps", "Abs", "Cardio"]
+    let allMuscles = MuscleGroup.allCases
     
     var body: some View {
         NavigationView {
             List {
-                ForEach(allMuscles, id: \.self) { muscle in
-                    HStack {
-                        Text(muscle)
-                        Spacer()
-                        if selectedMusclesString.contains(muscle) {
-                            Image(systemName: "checkmark").foregroundColor(.blue)
-                        }
+                ForEach(MuscleGroup.allCases, id: \.self) { muscle in
+                HStack {
+                    Text(muscle.rawValue)
+                    Spacer()
+                    // Check against rawValue
+                    if selectedMusclesString.contains(muscle.rawValue) {
+                        Image(systemName: "checkmark").foregroundColor(.blue)
                     }
+                }
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        toggleMuscle(muscle)
+                        toggleMuscle(muscle.rawValue)
                     }
                 }
             }

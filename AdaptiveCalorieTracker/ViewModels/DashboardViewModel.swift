@@ -75,11 +75,11 @@ class DashboardViewModel {
         case 0: // Weight Trend
             progressWarningMessage = "Need more weight data over 30 days, or trend is moving away from goal."
         case 1: // Avg Intake
-            progressWarningMessage = settings.goalType == "Cutting"
+            progressWarningMessage = settings.goalType == GoalType.cutting.rawValue
                 ? "Eat less than maintenance on average to see estimate"
                 : "Eat more than maintenance on average to see estimate"
         case 2: // Fixed Target
-            progressWarningMessage = settings.goalType == "Cutting"
+            progressWarningMessage = settings.goalType == GoalType.cutting.rawValue
                 ? "Your daily goal must be lower than your maintenance (\(settings.maintenanceCalories))"
                 : "Your daily goal must be higher than your maintenance (\(settings.maintenanceCalories))"
         default:
@@ -171,8 +171,8 @@ class DashboardViewModel {
             dailyGoal: settings.dailyGoal
         ) else { return nil }
         
-        if settings.goalType == "Cutting" && kgPerDay >= 0 { return nil }
-        if settings.goalType == "Bulking" && kgPerDay <= 0 { return nil }
+        if settings.goalType == GoalType.cutting.rawValue && kgPerDay >= 0 { return nil }
+        if settings.goalType == GoalType.bulking.rawValue && kgPerDay <= 0 { return nil }
         
         let weightDiff = settings.targetWeight - currentWeight
         let days = weightDiff / kgPerDay

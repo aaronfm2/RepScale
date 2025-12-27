@@ -6,7 +6,7 @@ struct WeightTrackerView: View {
     // Sort by date descending
     @Query(sort: \WeightEntry.date, order: .reverse) private var weights: [WeightEntry]
     
-    @AppStorage("goalType") private var currentGoalType: String = "Cutting"
+    @AppStorage("goalType") private var currentGoalType: String = GoalType.cutting.rawValue
     
     @State private var showingAddWeight = false
     @State private var newWeight: String = ""

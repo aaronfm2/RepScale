@@ -16,100 +16,16 @@ struct AddWorkoutView: View {
     
     init(workoutToEdit: Workout?) {
         self.workoutToEdit = workoutToEdit
-        // Initialize the ViewModel with the passed workout
         _viewModel = State(initialValue: AddWorkoutViewModel(workoutToEdit: workoutToEdit))
     }
     
     var body: some View {
         NavigationView {
             Form {
-                // MARK: - Session Details
-                Section("Session Details") {
-                    DatePicker("Date", selection: $viewModel.date, displayedComponents: .date)
-                    
-                    Picker("Category", selection: $viewModel.category) {
-                        ForEach(viewModel.categories, id: \.self) { cat in
-                            Text(cat).tag(cat)
-                        }
-                    }
-                    
-                    DisclosureGroup("Muscles Trained (\(viewModel.selectedMuscles.count))") {
-                        ForEach(viewModel.muscles, id: \.self) { muscle in
-                            HStack {
-                                Text(muscle)
-                                Spacer()
-                                if viewModel.selectedMuscles.contains(muscle) {
-                                    Image(systemName: "checkmark").foregroundColor(.blue)
-                                }
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                if viewModel.selectedMuscles.contains(muscle) {
-                                    viewModel.selectedMuscles.remove(muscle)
-                                } else {
-                                    viewModel.selectedMuscles.insert(muscle)
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // MARK: - Exercises List
-                if viewModel.exercises.isEmpty {
-                    Section {
-                        Text("No exercises added yet.")
-                            .foregroundColor(.secondary)
-                            .italic()
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding()
-                    }
-                } else {
-                    ForEach(viewModel.groupedExercises, id: \.name) { group in
-                        Section {
-                            ForEach(Array(group.exercises.enumerated()), id: \.element) { index, ex in
-                                // EditExerciseRow is a subview (keep this in your project)
-                                EditExerciseRow(exercise: ex, index: index)
-                                    .swipeActions(edge: .leading) {
-                                        Button {
-                                            viewModel.duplicateExercise(ex)
-                                        } label: {
-                                            Label("Copy", systemImage: "plus.square.on.square")
-                                        }
-                                        .tint(.blue)
-                                    }
-                            }
-                            .onDelete { indexSet in
-                                viewModel.deleteFromGroup(group: group, at: indexSet)
-                            }
-                            
-                            Button(action: { viewModel.addSet(to: group.name) }) {
-                                Label("Add Set", systemImage: "plus")
-                                    .font(.subheadline)
-                            }
-                            
-                        } header: {
-                            HStack {
-                                Text(group.name).font(.headline).foregroundColor(.primary)
-                                Spacer()
-                                Text("\(group.exercises.count) sets")
-                                    .font(.caption).foregroundColor(.secondary).textCase(nil)
-                            }
-                        }
-                    }
-                }
-                
-                // MARK: - Add New Exercise Button
-                Section {
-                    Button(action: { viewModel.showAddExerciseSheet = true }) {
-                        Label("Add New Exercise", systemImage: "dumbbell.fill")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                    }
-                }
-                
-                Section("Notes") {
-                    TextField("Workout notes...", text: $viewModel.note)
-                }
+                sessionSection
+                exercisesSection
+                addExerciseSection
+                notesSection
             }
             .navigationTitle(workoutToEdit == nil ? "Log Workout" : "Edit Workout")
             .toolbar {
@@ -151,7 +67,9 @@ struct AddWorkoutView: View {
             }
             // Sheets & Alerts
             .sheet(isPresented: $viewModel.showAddExerciseSheet) {
-                AddExerciseSheet(exercises: $viewModel.exercises, workoutMuscles: viewModel.selectedMuscles)
+                // Fix: Convert Set<MuscleGroup> -> Set<String> for the subview
+                let muscleStrings = Set(viewModel.selectedMuscles.map { $0 })
+                AddExerciseSheet(exercises: $viewModel.exercises, workoutMuscles: muscleStrings)
             }
             .sheet(isPresented: $viewModel.showLoadTemplateSheet) {
                 LoadTemplateSheet(templates: templates) { selectedTemplate in
@@ -169,8 +87,108 @@ struct AddWorkoutView: View {
     }
 }
 
+// MARK: - Sub-View Extensions to Fix Compiler Timeouts
+extension AddWorkoutView {
+    
+    // 1. Session Details Section
+    private var sessionSection: some View {
+        Section("Session Details") {
+            DatePicker("Date", selection: $viewModel.date, displayedComponents: .date)
+            
+            Picker("Category", selection: $viewModel.category) {
+                ForEach(WorkoutCategories.allCases, id: \.self) { cat in
+                    Text(cat.rawValue).tag(cat)
+                }
+            }
+            
+            DisclosureGroup("Muscles Trained (\(viewModel.selectedMuscles.count))") {
+                ForEach(MuscleGroup.allCases, id: \.self) { muscle in
+                    HStack {
+                        Text(muscle.rawValue)
+                        Spacer()
+                        if viewModel.selectedMuscles.contains(muscle.rawValue) {
+                            Image(systemName: "checkmark").foregroundColor(.blue)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if viewModel.selectedMuscles.contains(muscle.rawValue) {
+                            viewModel.selectedMuscles.remove(muscle.rawValue)
+                        } else {
+                            viewModel.selectedMuscles.insert(muscle.rawValue)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // 2. Exercises List Section (Complex Logic)
+    @ViewBuilder
+    private var exercisesSection: some View {
+        if viewModel.exercises.isEmpty {
+            Section {
+                Text("No exercises added yet.")
+                    .foregroundColor(.secondary)
+                    .italic()
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
+            }
+        } else {
+            ForEach(viewModel.groupedExercises, id: \.name) { group in
+                Section {
+                    ForEach(Array(group.exercises.enumerated()), id: \.element) { index, ex in
+                        EditExerciseRow(exercise: ex, index: index)
+                            .swipeActions(edge: .leading) {
+                                Button {
+                                    viewModel.duplicateExercise(ex)
+                                } label: {
+                                    Label("Copy", systemImage: "plus.square.on.square")
+                                }
+                                .tint(.blue)
+                            }
+                    }
+                    .onDelete { indexSet in
+                        viewModel.deleteFromGroup(group: group, at: indexSet)
+                    }
+                    
+                    Button(action: { viewModel.addSet(to: group.name) }) {
+                        Label("Add Set", systemImage: "plus")
+                            .font(.subheadline)
+                    }
+                    
+                } header: {
+                    HStack {
+                        Text(group.name).font(.headline).foregroundColor(.primary)
+                        Spacer()
+                        Text("\(group.exercises.count) sets")
+                            .font(.caption).foregroundColor(.secondary).textCase(nil)
+                    }
+                }
+            }
+        }
+    }
+    
+    // 3. Add Exercise Button Section
+    private var addExerciseSection: some View {
+        Section {
+            Button(action: { viewModel.showAddExerciseSheet = true }) {
+                Label("Add New Exercise", systemImage: "dumbbell.fill")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+    }
+    
+    // 4. Notes Section
+    private var notesSection: some View {
+        Section("Notes") {
+            TextField("Workout notes...", text: $viewModel.note)
+        }
+    }
+}
+
 // MARK: - Subview for Editable Row
-// We extract this to use @Bindable safely on the Model class
 struct EditExerciseRow: View {
     @Bindable var exercise: ExerciseEntry
     let index: Int
@@ -238,9 +256,7 @@ struct EditExerciseRow: View {
     }
 }
 
-// MARK: - Updated Add Exercise Sheet with Library Support
-// (Note: This struct remains largely unchanged, just ensuring context access)
-
+// MARK: - Add Exercise Sheet
 struct AddExerciseSheet: View {
     @Binding var exercises: [ExerciseEntry]
     var workoutMuscles: Set<String>
@@ -390,7 +406,7 @@ struct AddExerciseSheet: View {
     }
 }
 
-// Template Loader (Unchanged)
+// MARK: - Template Loader
 struct LoadTemplateSheet: View {
     let templates: [WorkoutTemplate]
     let onSelect: (WorkoutTemplate) -> Void

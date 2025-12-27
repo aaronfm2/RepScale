@@ -69,8 +69,6 @@ struct AddExerciseDefinitionSheet: View {
     @State private var isCardio = false
     @State private var selectedMuscles: Set<String> = []
     
-    let allMuscles = ["Chest", "Back", "Legs", "Shoulders", "Biceps", "Triceps", "Abs", "Cardio"]
-    
     var body: some View {
         NavigationView {
             Form {
@@ -80,20 +78,20 @@ struct AddExerciseDefinitionSheet: View {
                 }
                 
                 Section("Target Muscles") {
-                    ForEach(allMuscles, id: \.self) { muscle in
+                    ForEach(MuscleGroup.allCases, id: \.self) { muscle in
                         HStack {
-                            Text(muscle)
+                            Text(muscle.rawValue)
                             Spacer()
-                            if selectedMuscles.contains(muscle) {
+                            if selectedMuscles.contains(muscle.rawValue) {
                                 Image(systemName: "checkmark").foregroundColor(.blue)
                             }
                         }
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            if selectedMuscles.contains(muscle) {
-                                selectedMuscles.remove(muscle)
+                            if selectedMuscles.contains(muscle.rawValue) {
+                                selectedMuscles.remove(muscle.rawValue)
                             } else {
-                                selectedMuscles.insert(muscle)
+                                selectedMuscles.insert(muscle.rawValue)
                             }
                         }
                     }

@@ -20,8 +20,12 @@ class AddWorkoutViewModel {
     var newTemplateName: String = ""
     
     // Constants
-    let categories = ["Push", "Pull", "Legs", "Upper", "Lower", "Full Body", "Cardio", "Chest", "Arms", "Back", "Shoulders", "Abs"]
-    let muscles = ["Chest", "Back", "Legs", "Shoulders", "Biceps", "Triceps", "Abs", "Cardio"]
+    var categories: [WorkoutCategories] {
+        WorkoutCategories.allCases
+    }
+    var muscles: [MuscleGroup] {
+        MuscleGroup.allCases
+    }
     
     // Helper Struct for UI
     struct ExerciseGroup {
