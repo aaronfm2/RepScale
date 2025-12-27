@@ -22,6 +22,9 @@ struct ContentView: View {
     @State private var selectedLogDate = Date()
     @State private var inputMode = 0
     
+    // --- NEW: Info Alert State ---
+    @State private var showingInfoAlert = false
+    
     // Inputs
     @State private var caloriesInput = ""
     @State private var proteinInput = ""
@@ -48,7 +51,12 @@ struct ContentView: View {
             }
             .navigationTitle("Daily Logs")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) { EditButton() }
+                // --- CHANGED: Replaced EditButton with Info Button ---
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { showingInfoAlert = true }) {
+                        Image(systemName: "info.circle")
+                    }
+                }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
@@ -67,6 +75,12 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showingLogSheet) {
                 logSheetContent
+            }
+            // --- NEW: Info Alert ---
+            .alert("Apple Health Sync", isPresented: $showingInfoAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("This data is automatically synced with Apple Health. If you use other apps (like MyFitnessPal) for tracking, ensure they are connected to Apple Health to view your logs here.")
             }
             .onAppear(perform: setupOnAppear)
             // --- SYNC HEALTHKIT DATA CHANGES ---

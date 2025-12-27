@@ -25,9 +25,18 @@ struct MainTabView: View {
             highlights: [.topLeft]
         ),
         
-        // 3. Logs -> Highlights Tab 1
+        // --- NEW STEP: Health Sync Info ---
         TutorialStep(
             id: 2,
+            title: "Apple Health Sync",
+            description: "Sync data from Apple Health. If you use other apps (like MyFitnessPal) for tracking, ensure they are connected to Apple Health.",
+            tabIndex: 0,
+            highlights: []
+        ),
+        
+        // 3. Logs -> Highlights Tab 1
+        TutorialStep(
+            id: 3,
             title: "Logs Tab",
             description: "Track your daily nutrition here. This data syncs automatically with Apple Health.",
             tabIndex: 1,
@@ -35,7 +44,7 @@ struct MainTabView: View {
         ),
         // 4. Logs -> Highlights Add Button
         TutorialStep(
-            id: 3,
+            id: 4,
             title: "Add Entries",
             description: "Use the + button to manually add calories or macros if you need to correct your data.",
             tabIndex: 1,
@@ -44,7 +53,7 @@ struct MainTabView: View {
 
         // 5. Workouts -> Highlights Tab 2
         TutorialStep(
-            id: 4,
+            id: 5,
             title: "Workouts Tab",
             description: "Track your training sessions, view history, and manage your exercise library.",
             tabIndex: 2,
@@ -52,7 +61,7 @@ struct MainTabView: View {
         ),
         // 6. Workouts -> Highlights Top Controls
         TutorialStep(
-            id: 5,
+            id: 6,
             title: "Workout Controls",
             description: "Top Right: Start a new workout.\nTop Left: Manage your Exercise Library.",
             tabIndex: 2,
@@ -61,7 +70,7 @@ struct MainTabView: View {
 
         // 7. Weight -> Highlights Tab 3
         TutorialStep(
-            id: 6,
+            id: 7,
             title: "Weight Tab",
             description: "Keep track of your weigh-ins here to visualize your progress over time.",
             tabIndex: 3,
@@ -69,7 +78,7 @@ struct MainTabView: View {
         ),
         // 8. Weight -> Highlights Add Button
         TutorialStep(
-            id: 7,
+            id: 8,
             title: "Log Weight",
             description: "Tap the + button to log today's weight.",
             tabIndex: 3,
