@@ -5,41 +5,19 @@ struct AddWorkoutView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     
+    // Fetch templates for the "Load Template" sheet
     @Query(sort: \WorkoutTemplate.name) private var templates: [WorkoutTemplate]
     
-    var workoutToEdit: Workout?
+    // The workout we are editing (if any)
+    let workoutToEdit: Workout?
     
-    @State private var date = Date()
-    @State private var category = "Push"
-    @State private var selectedMuscles: Set<String> = []
-    @State private var note = ""
+    // The ViewModel responsible for this View's state
+    @State private var viewModel: AddWorkoutViewModel
     
-    @State private var tempExercises: [ExerciseEntry] = []
-    @State private var showAddExerciseSheet = false
-    
-    @State private var showLoadTemplateSheet = false
-    @State private var showSaveTemplateAlert = false
-    @State private var newTemplateName = ""
-    
-    let categories = ["Push", "Pull", "Legs", "Upper", "Lower", "Full Body", "Cardio", "Chest", "Arms", "Back", "Shoulders", "Abs"]
-    let muscles = ["Chest", "Back", "Legs", "Shoulders", "Biceps", "Triceps", "Abs", "Cardio"]
-    
-    // --- Helper for Grouping ---
-    struct ExerciseGroup {
-        let name: String
-        var exercises: [ExerciseEntry]
-    }
-    
-    var groupedExercises: [ExerciseGroup] {
-        var groups: [ExerciseGroup] = []
-        for exercise in tempExercises {
-            if let index = groups.firstIndex(where: { $0.name == exercise.name }) {
-                groups[index].exercises.append(exercise)
-            } else {
-                groups.append(ExerciseGroup(name: exercise.name, exercises: [exercise]))
-            }
-        }
-        return groups
+    init(workoutToEdit: Workout?) {
+        self.workoutToEdit = workoutToEdit
+        // Initialize the ViewModel with the passed workout
+        _viewModel = State(initialValue: AddWorkoutViewModel(workoutToEdit: workoutToEdit))
     }
     
     var body: some View {
@@ -47,37 +25,37 @@ struct AddWorkoutView: View {
             Form {
                 // MARK: - Session Details
                 Section("Session Details") {
-                    DatePicker("Date", selection: $date, displayedComponents: .date)
+                    DatePicker("Date", selection: $viewModel.date, displayedComponents: .date)
                     
-                    Picker("Category", selection: $category) {
-                        ForEach(categories, id: \.self) { cat in
+                    Picker("Category", selection: $viewModel.category) {
+                        ForEach(viewModel.categories, id: \.self) { cat in
                             Text(cat).tag(cat)
                         }
                     }
                     
-                    DisclosureGroup("Muscles Trained (\(selectedMuscles.count))") {
-                        ForEach(muscles, id: \.self) { muscle in
+                    DisclosureGroup("Muscles Trained (\(viewModel.selectedMuscles.count))") {
+                        ForEach(viewModel.muscles, id: \.self) { muscle in
                             HStack {
                                 Text(muscle)
                                 Spacer()
-                                if selectedMuscles.contains(muscle) {
+                                if viewModel.selectedMuscles.contains(muscle) {
                                     Image(systemName: "checkmark").foregroundColor(.blue)
                                 }
                             }
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                if selectedMuscles.contains(muscle) {
-                                    selectedMuscles.remove(muscle)
+                                if viewModel.selectedMuscles.contains(muscle) {
+                                    viewModel.selectedMuscles.remove(muscle)
                                 } else {
-                                    selectedMuscles.insert(muscle)
+                                    viewModel.selectedMuscles.insert(muscle)
                                 }
                             }
                         }
                     }
                 }
                 
-                // MARK: - Exercises List (Editable)
-                if tempExercises.isEmpty {
+                // MARK: - Exercises List
+                if viewModel.exercises.isEmpty {
                     Section {
                         Text("No exercises added yet.")
                             .foregroundColor(.secondary)
@@ -86,39 +64,35 @@ struct AddWorkoutView: View {
                             .padding()
                     }
                 } else {
-                    ForEach(groupedExercises, id: \.name) { group in
+                    ForEach(viewModel.groupedExercises, id: \.name) { group in
                         Section {
                             ForEach(Array(group.exercises.enumerated()), id: \.element) { index, ex in
-                                // Use Bindable to make the exercise editable in place
+                                // EditExerciseRow is a subview (keep this in your project)
                                 EditExerciseRow(exercise: ex, index: index)
-                                .swipeActions(edge: .leading) {
-                                    Button {
-                                        duplicateExercise(ex)
-                                    } label: {
-                                        Label("Copy", systemImage: "plus.square.on.square")
+                                    .swipeActions(edge: .leading) {
+                                        Button {
+                                            viewModel.duplicateExercise(ex)
+                                        } label: {
+                                            Label("Copy", systemImage: "plus.square.on.square")
+                                        }
+                                        .tint(.blue)
                                     }
-                                    .tint(.blue)
-                                }
                             }
                             .onDelete { indexSet in
-                                deleteFromGroup(group: group, at: indexSet)
+                                viewModel.deleteFromGroup(group: group, at: indexSet)
                             }
                             
-                            Button(action: { addSet(to: group.name) }) {
+                            Button(action: { viewModel.addSet(to: group.name) }) {
                                 Label("Add Set", systemImage: "plus")
                                     .font(.subheadline)
                             }
                             
                         } header: {
                             HStack {
-                                Text(group.name)
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
+                                Text(group.name).font(.headline).foregroundColor(.primary)
                                 Spacer()
                                 Text("\(group.exercises.count) sets")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .textCase(nil)
+                                    .font(.caption).foregroundColor(.secondary).textCase(nil)
                             }
                         }
                     }
@@ -126,7 +100,7 @@ struct AddWorkoutView: View {
                 
                 // MARK: - Add New Exercise Button
                 Section {
-                    Button(action: { showAddExerciseSheet = true }) {
+                    Button(action: { viewModel.showAddExerciseSheet = true }) {
                         Label("Add New Exercise", systemImage: "dumbbell.fill")
                             .font(.headline)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -134,7 +108,7 @@ struct AddWorkoutView: View {
                 }
                 
                 Section("Notes") {
-                    TextField("Workout notes...", text: $note)
+                    TextField("Workout notes...", text: $viewModel.note)
                 }
             }
             .navigationTitle(workoutToEdit == nil ? "Log Workout" : "Edit Workout")
@@ -145,140 +119,53 @@ struct AddWorkoutView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack {
+                        // Templates Menu
                         Menu {
                             Button {
-                                showLoadTemplateSheet = true
+                                viewModel.showLoadTemplateSheet = true
                             } label: {
                                 Label("Load Template", systemImage: "arrow.down.doc")
                             }
                             
                             Button {
-                                newTemplateName = ""
-                                showSaveTemplateAlert = true
+                                viewModel.newTemplateName = ""
+                                viewModel.showSaveTemplateAlert = true
                             } label: {
                                 Label("Save as Template", systemImage: "arrow.up.doc")
                             }
-                            .disabled(tempExercises.isEmpty)
+                            .disabled(viewModel.exercises.isEmpty)
                         } label: {
                             Image(systemName: "doc.text")
                         }
 
-                        Button("Save") { saveWorkout() }
-                            .disabled(selectedMuscles.isEmpty)
-                            .bold()
+                        // Save Button
+                        Button("Save") {
+                            viewModel.saveWorkout(context: modelContext, originalWorkout: workoutToEdit) {
+                                dismiss()
+                            }
+                        }
+                        .disabled(viewModel.selectedMuscles.isEmpty)
+                        .bold()
                     }
                 }
             }
-            .sheet(isPresented: $showAddExerciseSheet) {
-                AddExerciseSheet(exercises: $tempExercises, workoutMuscles: selectedMuscles)
+            // Sheets & Alerts
+            .sheet(isPresented: $viewModel.showAddExerciseSheet) {
+                AddExerciseSheet(exercises: $viewModel.exercises, workoutMuscles: viewModel.selectedMuscles)
             }
-            .sheet(isPresented: $showLoadTemplateSheet) {
+            .sheet(isPresented: $viewModel.showLoadTemplateSheet) {
                 LoadTemplateSheet(templates: templates) { selectedTemplate in
-                    loadTemplate(selectedTemplate)
+                    viewModel.loadTemplate(selectedTemplate)
                 }
             }
-            .alert("Save Template", isPresented: $showSaveTemplateAlert) {
-                TextField("Template Name (e.g. Chest Day)", text: $newTemplateName)
+            .alert("Save Template", isPresented: $viewModel.showSaveTemplateAlert) {
+                TextField("Template Name (e.g. Chest Day)", text: $viewModel.newTemplateName)
                 Button("Cancel", role: .cancel) { }
-                Button("Save") { saveAsTemplate() }
+                Button("Save") { viewModel.saveAsTemplate(context: modelContext) }
             } message: {
                 Text("Save the current exercises and settings as a template?")
             }
-            .onAppear {
-                if let workout = workoutToEdit {
-                    date = workout.date
-                    category = workout.category
-                    selectedMuscles = Set(workout.muscleGroups)
-                    note = workout.note
-                    tempExercises = workout.exercises
-                }
-            }
         }
-    }
-    
-    // MARK: - Logic Helpers (Unchanged)
-    
-    func deleteFromGroup(group: ExerciseGroup, at offsets: IndexSet) {
-        let exercisesToDelete = offsets.map { group.exercises[$0] }
-        tempExercises.removeAll { ex in
-            exercisesToDelete.contains(where: { $0 === ex })
-        }
-    }
-    
-    func addSet(to groupName: String) {
-        if let lastIndex = tempExercises.lastIndex(where: { $0.name == groupName }) {
-            let ex = tempExercises[lastIndex]
-            let newEx = ExerciseEntry(
-                name: ex.name,
-                reps: ex.reps,
-                weight: ex.weight,
-                duration: ex.duration,
-                distance: ex.distance,
-                isCardio: ex.isCardio,
-                note: ""
-            )
-            if lastIndex + 1 < tempExercises.count {
-                tempExercises.insert(newEx, at: lastIndex + 1)
-            } else {
-                tempExercises.append(newEx)
-            }
-        }
-    }
-    
-    func duplicateExercise(_ ex: ExerciseEntry) {
-        let newEx = ExerciseEntry(
-            name: ex.name,
-            reps: ex.reps,
-            weight: ex.weight,
-            duration: ex.duration,
-            distance: ex.distance,
-            isCardio: ex.isCardio,
-            note: ex.note
-        )
-        if let index = tempExercises.firstIndex(of: ex) {
-            if index + 1 < tempExercises.count {
-                tempExercises.insert(newEx, at: index + 1)
-            } else {
-                tempExercises.append(newEx)
-            }
-        } else {
-            tempExercises.append(newEx)
-        }
-    }
-    
-    func saveAsTemplate() {
-        guard !newTemplateName.isEmpty else { return }
-        let template = WorkoutTemplate(name: newTemplateName, category: category, muscleGroups: Array(selectedMuscles))
-        let templateExercises = tempExercises.map { ex in
-            TemplateExerciseEntry(name: ex.name, reps: ex.reps, weight: ex.weight, duration: ex.duration, distance: ex.distance, isCardio: ex.isCardio, note: ex.note)
-        }
-        template.exercises = templateExercises
-        modelContext.insert(template)
-    }
-    
-    func loadTemplate(_ template: WorkoutTemplate) {
-        category = template.category
-        selectedMuscles = Set(template.muscleGroups)
-        let newExercises = template.exercises.map { tex in
-            ExerciseEntry(name: tex.name, reps: tex.reps, weight: tex.weight, duration: tex.duration, distance: tex.distance, isCardio: tex.isCardio, note: tex.note)
-        }
-        tempExercises.append(contentsOf: newExercises)
-        showLoadTemplateSheet = false
-    }
-    
-    func saveWorkout() {
-        if let workout = workoutToEdit {
-            workout.date = Calendar.current.startOfDay(for: date)
-            workout.category = category
-            workout.muscleGroups = Array(selectedMuscles)
-            workout.note = note
-            workout.exercises = tempExercises
-        } else {
-            let workout = Workout(date: date, category: category, muscleGroups: Array(selectedMuscles), note: note)
-            workout.exercises = tempExercises
-            modelContext.insert(workout)
-        }
-        dismiss()
     }
 }
 
