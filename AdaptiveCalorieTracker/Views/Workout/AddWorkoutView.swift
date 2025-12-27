@@ -249,8 +249,8 @@ struct RestTimerSection: View {
                             .tint(.blue)
                         }
                         
-                        Button("+10s") {
-                            addTime(10)
+                        Button("+15s") {
+                            addTime(15)
                         }
                         .buttonStyle(.bordered)
                     }

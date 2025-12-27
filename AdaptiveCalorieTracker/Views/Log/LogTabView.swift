@@ -89,7 +89,7 @@ struct ContentView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack {
-                        Button(action: refreshLast30Days) {
+                        Button(action: refreshLast365Days) {
                             if isRefreshingHistory {
                                 ProgressView()
                             } else {
@@ -151,7 +151,7 @@ struct ContentView: View {
 
     // MARK: - Helper Methods
     
-    private func refreshLast30Days() {
+    private func refreshLast365Days() {
         isRefreshingHistory = true
         
         // 1. Get the date of the very first weight entry
@@ -161,7 +161,7 @@ struct ContentView: View {
         Task {
             let today = Calendar.current.startOfDay(for: Date())
             
-            for i in 0..<30 {
+            for i in 0..<365 {
                 guard let date = Calendar.current.date(byAdding: .day, value: -i, to: today) else { continue }
                 
                 // 2. CHECK: Is this date older than our first weight entry?

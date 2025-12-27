@@ -24,7 +24,7 @@ struct OnboardingView: View {
     // Manual/Calculated Inputs
     @State private var maintenanceInput: String = ""
     @State private var dailyGoalInput: String = ""
-    @State private var trackCaloriesBurned: Bool = true
+    @State private var trackCaloriesBurned: Bool = false
     
     // --- AppStorage Keys ---
     @AppStorage("dailyCalorieGoal") private var storedDailyGoal: Int = 2000
