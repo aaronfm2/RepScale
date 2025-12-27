@@ -100,28 +100,35 @@ class DashboardViewModel {
     }
 
     private func calculateEstimatedMaintenance(logs: [DailyLog], weights: [WeightEntry]) -> Int? {
-        // ... [Keep existing logic] ...
-        let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
-        let recentWeights = weights.filter { $0.date >= thirtyDaysAgo }.sorted { $0.date < $1.date }
-        
-        guard let first = recentWeights.first, let last = recentWeights.last, first.id != last.id else { return nil }
-        
-        let start = Calendar.current.startOfDay(for: first.date)
-        let end = Calendar.current.startOfDay(for: last.date)
-        let days = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 0
-        guard days > 0 else { return nil }
-        
-        let weightChange = last.weight - first.weight
-        let today = Calendar.current.startOfDay(for: Date())
-        let relevantLogs = logs.filter { $0.date >= first.date && $0.date <= last.date && $0.date < today }
-        guard !relevantLogs.isEmpty else { return nil }
-        
-        let totalConsumed = relevantLogs.reduce(0) { $0 + $1.caloriesConsumed }
-        let avgDailyIntake = Double(totalConsumed) / Double(relevantLogs.count)
-        let dailyImbalance = (weightChange * 7700.0) / Double(days)
-        
-        return Int(avgDailyIntake - dailyImbalance)
-    }
+            let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
+            let recentWeights = weights.filter { $0.date >= thirtyDaysAgo }.sorted { $0.date < $1.date }
+            
+            guard let first = recentWeights.first, let last = recentWeights.last, first.id != last.id else { return nil }
+            
+            let start = Calendar.current.startOfDay(for: first.date)
+            let end = Calendar.current.startOfDay(for: last.date)
+            let days = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 0
+            guard days > 0 else { return nil }
+            
+            let weightChange = last.weight - first.weight
+            let today = Calendar.current.startOfDay(for: Date())
+            
+            // --- UPDATED FILTER: Exclude days with 0 calories ---
+            let relevantLogs = logs.filter {
+                $0.date >= first.date &&
+                $0.date <= last.date &&
+                $0.date < today &&
+                $0.caloriesConsumed > 0 // Ignore empty logs
+            }
+            
+            guard !relevantLogs.isEmpty else { return nil }
+            
+            let totalConsumed = relevantLogs.reduce(0) { $0 + $1.caloriesConsumed }
+            let avgDailyIntake = Double(totalConsumed) / Double(relevantLogs.count)
+            let dailyImbalance = (weightChange * 7700.0) / Double(days)
+            
+            return Int(avgDailyIntake - dailyImbalance)
+        }
 
     private func calculateKgChangePerDay(method: Int, weights: [WeightEntry], logs: [DailyLog], maintenanceCalories: Int, dailyGoal: Int) -> Double? {
         // Method 0: Weight Trend (Last 30 Days)

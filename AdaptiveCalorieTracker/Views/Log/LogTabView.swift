@@ -17,7 +17,7 @@ struct ContentView: View {
     @AppStorage("goalType") private var currentGoalType: String = GoalType.cutting.rawValue
     @AppStorage("enableCaloriesBurned") private var enableCaloriesBurned: Bool = true
     
-    // --- NEW: Toggle to control visibility ---
+    // Toggle to control visibility
     @AppStorage("isCalorieCountingEnabled") private var isCalorieCountingEnabled: Bool = true
     
     // Sheet State
@@ -57,6 +57,28 @@ struct ContentView: View {
             LogSection(month: month, logs: grouped[month]!)
         }
     }
+    
+    // --- Calculate 30-Day Average (Excluding Today) ---
+        var averageCalories30Days: Int {
+            let calendar = Calendar.current
+            let today = calendar.startOfDay(for: Date())
+            let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: today)!
+            
+            // Filter logs:
+            // 1. Date is within the last 30 days
+            // 2. Date is strictly BEFORE today (excludes current incomplete day)
+            // 3. Calories > 0 (ignore empty logs)
+            let recentLogs = logs.filter {
+                $0.date >= thirtyDaysAgo &&
+                $0.date < today &&
+                $0.caloriesConsumed > 0
+            }
+            
+            guard !recentLogs.isEmpty else { return 0 }
+            
+            let total = recentLogs.reduce(0) { $0 + $1.caloriesConsumed }
+            return total / recentLogs.count
+        }
 
     var body: some View {
         NavigationView {
@@ -160,8 +182,6 @@ struct ContentView: View {
     private func refreshLast365Days() {
         isRefreshingHistory = true
         
-        // 1. Get the date of the very first weight entry
-        // Since the query is sorted .forward, the first item is the oldest.
         let firstWeightDate = weightEntries.first?.date
         
         Task {
@@ -170,11 +190,8 @@ struct ContentView: View {
             for i in 0..<365 {
                 guard let date = Calendar.current.date(byAdding: .day, value: -i, to: today) else { continue }
                 
-                // 2. CHECK: Is this date older than our first weight entry?
-                // If we have a first weight date, and the current 'date' is strictly before it (ignoring time), SKIP.
                 if let startLimit = firstWeightDate {
                     let startOfDayLimit = Calendar.current.startOfDay(for: startLimit)
-                    // If date < startLimit, skip.
                     if date < startOfDayLimit {
                         continue
                     }
@@ -380,7 +397,6 @@ struct ContentView: View {
         }
     }
     
-    // Updated delete function to work with sections
     private func deleteItems(at offsets: IndexSet, from sectionLogs: [DailyLog]) {
         withAnimation {
             for index in offsets {
@@ -395,12 +411,24 @@ struct ContentView: View {
             let burned = enableCaloriesBurned ? today.caloriesBurned : 0
             let remaining = dailyGoal + burned - today.caloriesConsumed
             
-            VStack(spacing: 5) {
-                Text("\(remaining)")
-                    .font(.system(size: 40, weight: .bold))
-                    .foregroundColor(remaining < 0 ? .red : .blue)
-                Text("Calories Left Today")
-                    .font(.caption).foregroundColor(.secondary)
+            VStack(spacing: 8) { // Slightly increased spacing
+                // Existing Counter
+                VStack(spacing: 5) {
+                    Text("\(remaining)")
+                        .font(.system(size: 40, weight: .bold))
+                        .foregroundColor(remaining < 0 ? .red : .blue)
+                    Text("Calories Left Today")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+                
+                // --- NEW: 30 Day Avg Display ---
+                if averageCalories30Days > 0 {
+                    Text("30-Day Avg: \(averageCalories30Days) kcal")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 4)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
