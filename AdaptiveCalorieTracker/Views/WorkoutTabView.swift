@@ -62,7 +62,7 @@ struct WorkoutTabView: View {
                                             .font(.caption).foregroundColor(.secondary)
                                     }
                                     Spacer()
-                                    // Badge Style from screenshot
+                                    // Badge Style
                                     Text(workout.muscleGroups.joined(separator: ", "))
                                         .font(.caption)
                                         .padding(.horizontal, 8)
@@ -116,7 +116,6 @@ struct WorkoutTabView: View {
         }
     }
     
-    // Logic to calculate days since a specific muscle was trained
     private func daysSinceLastTrained(_ muscle: String) -> Int? {
         if let lastWorkout = workouts.first(where: { $0.muscleGroups.contains(muscle) }) {
             let components = Calendar.current.dateComponents([.day], from: lastWorkout.date, to: Calendar.current.startOfDay(for: Date()))
@@ -158,16 +157,28 @@ struct WorkoutCalendarView: View {
     let days = ["S", "M", "T", "W", "T", "F", "S"]
     @State private var currentMonth = Date()
     
+    // --- UPDATED STATE ---
+    @State private var selectedWorkouts: [Workout] = []
+    @State private var isNavigating = false
+    
     var body: some View {
         VStack {
             // Month Header
             HStack {
-                Button(action: { changeMonth(by: -1) }) { Image(systemName: "chevron.left") }
+                Button(action: { changeMonth(by: -1) }) {
+                    Image(systemName: "chevron.left")
+                }
+                .buttonStyle(.borderless)
+
                 Spacer()
                 Text(currentMonth, format: .dateTime.month(.wide).year())
                     .font(.headline)
                 Spacer()
-                Button(action: { changeMonth(by: 1) }) { Image(systemName: "chevron.right") }
+                
+                Button(action: { changeMonth(by: 1) }) {
+                    Image(systemName: "chevron.right")
+                }
+                .buttonStyle(.borderless)
             }
             .padding(.bottom, 10)
             
@@ -183,27 +194,41 @@ struct WorkoutCalendarView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 10) {
                 ForEach(daysInMonth, id: \.self) { date in
                     if let date = date {
-                        // Find ANY workout on this day (allows multiples)
-                        let hasWorkout = workouts.contains(where: { Calendar.current.isDate($0.date, inSameDayAs: date) })
-                        // Just pick the first one for color if exists
-                        let workout = workouts.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) })
+                        // --- UPDATED LOGIC: Find ALL workouts for this day ---
+                        let dailyWorkouts = workouts.filter({ Calendar.current.isDate($0.date, inSameDayAs: date) })
+                        let hasWorkout = !dailyWorkouts.isEmpty
                         
+                        // Content for the day cell
                         VStack(spacing: 2) {
                             Text("\(Calendar.current.component(.day, from: date))")
                                 .font(.caption2)
                             
                             // Dot indicator
-                            if hasWorkout, let w = workout {
-                                Circle()
-                                    .fill(categoryColor(w.category))
-                                    .frame(width: 6, height: 6)
+                            if hasWorkout {
+                                HStack(spacing: 2) {
+                                    // If multiple, show up to 2 dots, otherwise 1
+                                    ForEach(dailyWorkouts.prefix(dailyWorkouts.count > 1 ? 2 : 1)) { w in
+                                        Circle()
+                                            .fill(categoryColor(w.category))
+                                            .frame(width: 6, height: 6)
+                                    }
+                                }
                             } else {
                                 Circle().fill(Color.clear).frame(width: 6, height: 6)
                             }
                         }
                         .frame(height: 40)
+                        .frame(maxWidth: .infinity)
                         .background(Calendar.current.isDateInToday(date) ? Color.blue.opacity(0.1) : Color.clear)
                         .cornerRadius(8)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if hasWorkout {
+                                selectedWorkouts = dailyWorkouts
+                                isNavigating = true
+                            }
+                        }
+
                     } else {
                         Text("").frame(height: 40)
                     }
@@ -212,6 +237,26 @@ struct WorkoutCalendarView: View {
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
+        // --- UPDATED NAVIGATION ---
+        .background(
+            NavigationLink(
+                destination: destinationView,
+                isActive: $isNavigating
+            ) {
+                EmptyView()
+            }
+            .hidden()
+        )
+    }
+    
+    // --- NEW: Computes where to go based on how many workouts are on that day ---
+    @ViewBuilder
+    var destinationView: some View {
+        if selectedWorkouts.count == 1, let first = selectedWorkouts.first {
+            WorkoutDetailView(workout: first)
+        } else {
+            DailyWorkoutListView(workouts: selectedWorkouts)
+        }
     }
     
     func categoryColor(_ cat: String) -> Color {
@@ -247,7 +292,29 @@ struct WorkoutCalendarView: View {
     }
 }
 
-// Subview: Muscle Selection Settings
+// --- NEW VIEW: List for days with multiple workouts ---
+struct DailyWorkoutListView: View {
+    let workouts: [Workout]
+    
+    var body: some View {
+        List(workouts) { workout in
+            NavigationLink(destination: WorkoutDetailView(workout: workout)) {
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(workout.category)
+                            .font(.headline)
+                            .foregroundColor(.blue)
+                        Text(workout.muscleGroups.joined(separator: ", "))
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                }
+            }
+        }
+        .navigationTitle("Workouts")
+    }
+}
+
 struct MuscleSelectionView: View {
     @Binding var selectedMusclesString: String
     @Environment(\.dismiss) var dismiss

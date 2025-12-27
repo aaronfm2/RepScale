@@ -2,6 +2,7 @@ import SwiftUI
 
 struct WorkoutDetailView: View {
     let workout: Workout
+    @State private var isEditing = false
     
     var body: some View {
         List {
@@ -55,5 +56,13 @@ struct WorkoutDetailView: View {
             }
         }
         .navigationTitle(workout.category)
+        .toolbar {
+            Button("Edit") {
+                isEditing = true
+            }
+        }
+        .sheet(isPresented: $isEditing) {
+            AddWorkoutView(workoutToEdit: workout)
+        }
     }
 }
