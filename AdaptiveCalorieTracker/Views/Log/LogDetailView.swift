@@ -9,7 +9,9 @@ struct LogDetailView: View {
     @State private var isSyncing = false
     @AppStorage("enableCaloriesBurned") private var enableCaloriesBurned: Bool = true
     
-    // Edit Sheet State
+    // --- NEW: Toggle ---
+    @AppStorage("isCalorieCountingEnabled") private var isCalorieCountingEnabled: Bool = true
+    
     @State private var showingEditOverrides = false
     
     func groupExercises(_ exercises: [ExerciseEntry]) -> [(name: String, sets: [ExerciseEntry])] {
@@ -29,12 +31,14 @@ struct LogDetailView: View {
             VStack(spacing: 24) {
                 dateHeader
                 
-                // --- NEW: Manual Override Summary ---
-                if log.isOverridden {
-                    manualOverrideBanner
+                // Only show if enabled
+                if isCalorieCountingEnabled {
+                    if log.isOverridden {
+                        manualOverrideBanner
+                    }
+                    nutritionSection
                 }
                 
-                nutritionSection
                 workoutsSection
             }
             .padding(.bottom, 30)
@@ -44,8 +48,10 @@ struct LogDetailView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack {
-                    // Edit Button
-                    Button("Edit") { showingEditOverrides = true }
+                    // Edit Button (only if calories enabled, as that's what it edits)
+                    if isCalorieCountingEnabled {
+                        Button("Edit") { showingEditOverrides = true }
+                    }
                     
                     // Sync Button
                     Button(action: syncHealthData) {
@@ -64,18 +70,16 @@ struct LogDetailView: View {
         }
     }
     
-    // MARK: - Actions
+    // ... [Keep syncHealthData, manualOverrideBanner, dateHeader, nutritionSection, workoutsSection, workoutCard, exerciseRow] ...
     
     private func syncHealthData() {
         isSyncing = true
         Task {
             let data = await healthManager.fetchHistoricalHealthData(for: log.date)
-            
             await MainActor.run {
                 withAnimation {
-                    // Update Total = HealthKit + Manual
                     if data.consumed > 0 { log.caloriesConsumed = Int(data.consumed) + log.manualCalories }
-                    if enableCaloriesBurned { log.caloriesBurned = Int(data.burned) } // Burned usually isn't manual
+                    if enableCaloriesBurned { log.caloriesBurned = Int(data.burned) }
                     
                     if data.protein > 0 { log.protein = Int(data.protein) + log.manualProtein }
                     if data.carbs > 0 { log.carbs = Int(data.carbs) + log.manualCarbs }
@@ -86,9 +90,7 @@ struct LogDetailView: View {
             }
         }
     }
-    
-    // MARK: - Subviews
-    
+
     private var manualOverrideBanner: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Includes Manual Adjustments")
@@ -163,7 +165,6 @@ struct LogDetailView: View {
         .padding(.horizontal)
     }
     
-    // ... [Workouts Section and Helpers remain unchanged] ...
     private var workoutsSection: some View {
         VStack(alignment: .leading, spacing: 15) {
             Text("Workouts").font(.headline).padding(.horizontal)
@@ -195,34 +196,21 @@ struct LogDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading) {
-                    Text(w.category)
-                        .font(.title3).bold()
-                        .foregroundColor(.blue)
-                    Text(w.muscleGroups.joined(separator: ", "))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                    Text(w.category).font(.title3).bold().foregroundColor(.blue)
+                    Text(w.muscleGroups.joined(separator: ", ")).font(.subheadline).foregroundColor(.secondary)
                 }
                 Spacer()
-                Image(systemName: "dumbbell.fill")
-                    .font(.largeTitle)
-                    .foregroundColor(.blue.opacity(0.2))
+                Image(systemName: "dumbbell.fill").font(.largeTitle).foregroundColor(.blue.opacity(0.2))
             }
             .padding(.bottom, 5)
-            
             Divider()
-            
             if w.exercises.isEmpty {
-                Text("No exercises logged.")
-                    .font(.caption).italic().foregroundColor(.secondary)
+                Text("No exercises logged.").font(.caption).italic().foregroundColor(.secondary)
             } else {
                 let grouped = groupExercises(w.exercises)
                 ForEach(grouped, id: \.name) { group in
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(group.name)
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                            .padding(.top, 4)
-                        
+                        Text(group.name).font(.headline).foregroundColor(.primary).padding(.top, 4)
                         ForEach(Array(group.sets.enumerated()), id: \.element) { index, exercise in
                             exerciseRow(for: exercise, setNumber: index + 1)
                         }
@@ -230,11 +218,9 @@ struct LogDetailView: View {
                     .padding(.bottom, 4)
                 }
             }
-            
             if !w.note.isEmpty {
                 Divider()
-                Text("Note: \(w.note)")
-                    .font(.caption).italic().foregroundColor(.secondary)
+                Text("Note: \(w.note)").font(.caption).italic().foregroundColor(.secondary)
             }
         }
         .padding()
@@ -245,44 +231,29 @@ struct LogDetailView: View {
     private func exerciseRow(for exercise: ExerciseEntry, setNumber: Int) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("Set \(setNumber)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(width: 40, alignment: .leading)
-                
-                Divider()
-                    .frame(height: 15)
-                
+                Text("Set \(setNumber)").font(.caption).foregroundColor(.secondary).frame(width: 40, alignment: .leading)
+                Divider().frame(height: 15)
                 if exercise.isCardio {
                     HStack(spacing: 8) {
-                        if let dist = exercise.distance, dist > 0 {
-                            Text("\(dist, specifier: "%.2f") km")
-                        }
-                        if let time = exercise.duration, time > 0 {
-                            Text("\(Int(time)) min")
-                        }
+                        if let dist = exercise.distance, dist > 0 { Text("\(dist, specifier: "%.2f") km") }
+                        if let time = exercise.duration, time > 0 { Text("\(Int(time)) min") }
                     }
                     .font(.callout).monospacedDigit().foregroundColor(.blue)
                 } else {
                     Text("\(exercise.reps ?? 0) x \(exercise.weight ?? 0.0, specifier: "%.1f") kg")
                         .font(.callout).monospacedDigit()
                 }
-                
                 Spacer()
             }
-            
             if !exercise.note.isEmpty {
-                Text(exercise.note)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.leading, 50)
+                Text(exercise.note).font(.caption).foregroundColor(.secondary).padding(.leading, 50)
             }
         }
         .padding(.vertical, 2)
     }
 }
 
-// Helper Sheet for Editing Overrides
+// ... [Keep EditOverridesSheet and MacroCard] ...
 struct EditOverridesSheet: View {
     @Bindable var log: DailyLog
     @Environment(\.dismiss) var dismiss
@@ -316,25 +287,16 @@ struct EditOverridesSheet: View {
                             .keyboardType(.numberPad).multilineTextAlignment(.trailing)
                     }
                 }
-                
                 Section(footer: Text("Adjusting these values updates the Total instantly. HealthKit data remains the baseline.")) { }
             }
             .navigationTitle("Edit Manual Entries")
             .toolbar {
-                Button("Done") {
-                    // Trigger a refresh of totals in case user edited them down
-                    // We assume HealthKit baseline is (Total - OldManual).
-                    // This is slightly lossy if we don't have the exact HK snapshot, but for "Additions" it works:
-                    // We just need to make sure we don't double count.
-                    // Actually, simpler: The view binds directly to manualCalories.
-                    // When this closes, LogDetailView will re-render.
-                    // We might want to force a sync if needed, but user just edited the manual part.
-                    dismiss()
-                }
+                Button("Done") { dismiss() }
             }
         }
     }
 }
+
 struct MacroCard: View {
     let title: String
     let value: Int?
@@ -342,18 +304,11 @@ struct MacroCard: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            Text(title)
-                .font(.caption)
-                .fontWeight(.bold)
-                .foregroundColor(color)
-            
+            Text(title).font(.caption).fontWeight(.bold).foregroundColor(color)
             if let v = value {
-                Text("\(v)g")
-                    .font(.headline)
+                Text("\(v)g").font(.headline)
             } else {
-                Text("-")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
+                Text("-").font(.headline).foregroundColor(.secondary)
             }
         }
         .frame(maxWidth: .infinity)

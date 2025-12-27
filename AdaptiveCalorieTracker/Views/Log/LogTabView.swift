@@ -8,7 +8,7 @@ struct ContentView: View {
     // Fetch workouts to link them to logs
     @Query(sort: \Workout.date, order: .reverse) private var workouts: [Workout]
     
-    // --- NEW: Fetch Weight Entries to find the starting date ---
+    // Fetch Weight Entries to find the starting date
     @Query(sort: \WeightEntry.date, order: .forward) private var weightEntries: [WeightEntry]
     
     @EnvironmentObject var healthManager: HealthManager
@@ -16,6 +16,9 @@ struct ContentView: View {
     @AppStorage("dailyCalorieGoal") private var dailyGoal: Int = 2000
     @AppStorage("goalType") private var currentGoalType: String = GoalType.cutting.rawValue
     @AppStorage("enableCaloriesBurned") private var enableCaloriesBurned: Bool = true
+    
+    // --- NEW: Toggle to control visibility ---
+    @AppStorage("isCalorieCountingEnabled") private var isCalorieCountingEnabled: Bool = true
     
     // Sheet State
     @State private var showingLogSheet = false
@@ -58,7 +61,10 @@ struct ContentView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                summaryHeader
+                // Only show calorie summary if enabled
+                if isCalorieCountingEnabled {
+                    summaryHeader
+                }
                 
                 List {
                     ForEach(groupedSections) { section in
@@ -219,41 +225,48 @@ struct ContentView: View {
                     .pickerStyle(.segmented)
                 }
                 
-                Section("Energy") {
-                    HStack {
-                        Text("Calories")
-                        Spacer()
-                        TextField("kcal", text: $caloriesInput)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
+                if isCalorieCountingEnabled {
+                    Section("Energy") {
+                        HStack {
+                            Text("Calories")
+                            Spacer()
+                            TextField("kcal", text: $caloriesInput)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                        }
+                    }
+                    
+                    Section("Macros (Optional)") {
+                        HStack {
+                            Text("Protein (g)")
+                            Spacer()
+                            TextField("0", text: $proteinInput)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                        }
+                        HStack {
+                            Text("Carbs (g)")
+                            Spacer()
+                            TextField("0", text: $carbsInput)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                        }
+                        HStack {
+                            Text("Fat (g)")
+                            Spacer()
+                            TextField("0", text: $fatInput)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                        }
+                    }
+                    
+                    Section(footer: Text(inputMode == 0 ? "Values will be added to existing HealthKit data." : "Calculates the offset needed to reach this total.")) { }
+                } else {
+                    Section {
+                        Text("Calorie counting is currently disabled in Settings.")
+                            .foregroundColor(.secondary)
                     }
                 }
-                
-                Section("Macros (Optional)") {
-                    HStack {
-                        Text("Protein (g)")
-                        Spacer()
-                        TextField("0", text: $proteinInput)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                    }
-                    HStack {
-                        Text("Carbs (g)")
-                        Spacer()
-                        TextField("0", text: $carbsInput)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                    }
-                    HStack {
-                        Text("Fat (g)")
-                        Spacer()
-                        TextField("0", text: $fatInput)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                    }
-                }
-                
-                Section(footer: Text(inputMode == 0 ? "Values will be added to existing HealthKit data." : "Calculates the offset needed to reach this total.")) { }
             }
             .navigationTitle("Log Details")
             .toolbar {
@@ -404,7 +417,7 @@ struct ContentView: View {
                     Text(log.date, format: .dateTime.day().month(.abbreviated).year())
                         .font(.body)
                     
-                    if log.isOverridden {
+                    if log.isOverridden && isCalorieCountingEnabled {
                         Image(systemName: "o.circle.fill")
                             .font(.caption2)
                             .foregroundColor(.purple)
@@ -426,20 +439,23 @@ struct ContentView: View {
                 .font(.caption).foregroundColor(.secondary)
             }
             Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
-                HStack(spacing: 4) {
-                    Image(systemName: "fork.knife").font(.caption2)
-                    Text("\(log.caloriesConsumed) kcal")
-                }.foregroundColor(.blue)
-                
-                if enableCaloriesBurned {
+            
+            if isCalorieCountingEnabled {
+                VStack(alignment: .trailing, spacing: 4) {
                     HStack(spacing: 4) {
-                        Image(systemName: "flame.fill").font(.caption2)
-                        Text("\(log.caloriesBurned) kcal")
-                    }.foregroundColor(.orange)
+                        Image(systemName: "fork.knife").font(.caption2)
+                        Text("\(log.caloriesConsumed) kcal")
+                    }.foregroundColor(.blue)
+                    
+                    if enableCaloriesBurned {
+                        HStack(spacing: 4) {
+                            Image(systemName: "flame.fill").font(.caption2)
+                            Text("\(log.caloriesBurned) kcal")
+                        }.foregroundColor(.orange)
+                    }
                 }
+                .font(.subheadline)
             }
-            .font(.subheadline)
         }
     }
 }

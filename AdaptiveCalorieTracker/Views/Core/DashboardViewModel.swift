@@ -9,6 +9,8 @@ struct DashboardSettings {
     var maintenanceCalories: Int
     var estimationMethod: Int
     var enableCaloriesBurned: Bool
+    // --- NEW FIELD ---
+    var isCalorieCountingEnabled: Bool
 }
 
 // Struct for the graph
@@ -21,29 +23,39 @@ struct ProjectionPoint: Identifiable {
 
 @Observable
 class DashboardViewModel {
-    // MARK: - Output State (Read by the View)
+    // MARK: - Output State
     var daysRemaining: Int?
     var estimatedMaintenance: Int?
     var projectionPoints: [ProjectionPoint] = []
     
-    // UI Helper Text
     var logicDescription: String = ""
     var progressWarningMessage: String = ""
     
     // MARK: - Primary Calculation Function
     func updateMetrics(logs: [DailyLog], weights: [WeightEntry], settings: DashboardSettings) {
-        updateLogicDescription(method: settings.estimationMethod)
+        
+        // If calorie counting is disabled, we FORCE method 0 (Trend) logic
+        // regardless of what the user selected in settings previously.
+        let effectiveMethod = settings.isCalorieCountingEnabled ? settings.estimationMethod : 0
+        
+        updateLogicDescription(method: effectiveMethod)
         
         // 1. Calculate Maintenance
-        self.estimatedMaintenance = calculateEstimatedMaintenance(logs: logs, weights: weights)
+        // If disabled, we can't calculate maintenance from food logs accurately.
+        if settings.isCalorieCountingEnabled {
+            self.estimatedMaintenance = calculateEstimatedMaintenance(logs: logs, weights: weights)
+        } else {
+            self.estimatedMaintenance = nil
+        }
         
         // 2. Calculate Days Remaining
         self.daysRemaining = calculateDaysRemaining(
             weights: weights,
             logs: logs,
-            settings: settings
+            settings: settings,
+            forcedMethod: effectiveMethod // Pass effective method
         )
-        updateWarningMessage(settings: settings, hasDaysEstimate: daysRemaining != nil)
+        updateWarningMessage(settings: settings, hasDaysEstimate: daysRemaining != nil, effectiveMethod: effectiveMethod)
         
         // 3. Generate Projections
         self.projectionPoints = generateProjections(
@@ -65,13 +77,13 @@ class DashboardViewModel {
         }
     }
     
-    private func updateWarningMessage(settings: DashboardSettings, hasDaysEstimate: Bool) {
+    private func updateWarningMessage(settings: DashboardSettings, hasDaysEstimate: Bool, effectiveMethod: Int) {
         if hasDaysEstimate {
             progressWarningMessage = ""
             return
         }
         
-        switch settings.estimationMethod {
+        switch effectiveMethod {
         case 0: // Weight Trend
             progressWarningMessage = "Need more weight data over 30 days, or trend is moving away from goal."
         case 1: // Avg Intake
@@ -88,32 +100,24 @@ class DashboardViewModel {
     }
 
     private func calculateEstimatedMaintenance(logs: [DailyLog], weights: [WeightEntry]) -> Int? {
+        // ... [Keep existing logic] ...
         let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
-        
-        // Sort Oldest -> Newest for calculation
         let recentWeights = weights.filter { $0.date >= thirtyDaysAgo }.sorted { $0.date < $1.date }
         
-        guard let first = recentWeights.first, let last = recentWeights.last, first.id != last.id else {
-            return nil
-        }
+        guard let first = recentWeights.first, let last = recentWeights.last, first.id != last.id else { return nil }
         
         let start = Calendar.current.startOfDay(for: first.date)
         let end = Calendar.current.startOfDay(for: last.date)
         let days = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 0
-        
         guard days > 0 else { return nil }
         
         let weightChange = last.weight - first.weight
         let today = Calendar.current.startOfDay(for: Date())
-        
-        // Relevant logs strictly before today
         let relevantLogs = logs.filter { $0.date >= first.date && $0.date <= last.date && $0.date < today }
         guard !relevantLogs.isEmpty else { return nil }
         
         let totalConsumed = relevantLogs.reduce(0) { $0 + $1.caloriesConsumed }
         let avgDailyIntake = Double(totalConsumed) / Double(relevantLogs.count)
-        
-        // Energy Imbalance (7700 kcal approx 1kg fat)
         let dailyImbalance = (weightChange * 7700.0) / Double(days)
         
         return Int(avgDailyIntake - dailyImbalance)
@@ -137,17 +141,15 @@ class DashboardViewModel {
             }
         }
         
-        // Method 1: Avg Intake (User Maintenance - 7 Day Avg)
+        // Method 1: Avg Intake
         if method == 1 {
             let today = Calendar.current.startOfDay(for: Date())
             let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: today)!
-            
             let recentLogs = logs.filter { $0.date >= sevenDaysAgo && $0.date < today }
             
             if !recentLogs.isEmpty {
                 let totalConsumed = recentLogs.reduce(0) { $0 + $1.caloriesConsumed }
                 let avgConsumed = Double(totalConsumed) / Double(recentLogs.count)
-                
                 return (avgConsumed - Double(maintenanceCalories)) / 7700.0
             }
         }
@@ -160,11 +162,11 @@ class DashboardViewModel {
         return nil
     }
 
-    private func calculateDaysRemaining(weights: [WeightEntry], logs: [DailyLog], settings: DashboardSettings) -> Int? {
+    private func calculateDaysRemaining(weights: [WeightEntry], logs: [DailyLog], settings: DashboardSettings, forcedMethod: Int) -> Int? {
         guard let currentWeight = weights.first?.weight else { return nil }
         
         guard let kgPerDay = calculateKgChangePerDay(
-            method: settings.estimationMethod,
+            method: forcedMethod,
             weights: weights,
             logs: logs,
             maintenanceCalories: settings.maintenanceCalories,
@@ -183,7 +185,12 @@ class DashboardViewModel {
     private func generateProjections(startWeight: Double, weights: [WeightEntry], logs: [DailyLog], settings: DashboardSettings) -> [ProjectionPoint] {
         var points: [ProjectionPoint] = []
         let today = Date()
-        let comparisonMethods = [(0, "Trend (30d)"), (1, "Avg Intake (7d)"), (2, "Fixed Goal")]
+        
+        // If disabled, ONLY calculate method 0. Otherwise show all 3 for comparison.
+        var comparisonMethods = [(0, "Trend (30d)"), (1, "Avg Intake (7d)"), (2, "Fixed Goal")]
+        if !settings.isCalorieCountingEnabled {
+            comparisonMethods = [(0, "Trend (30d)")]
+        }
         
         for (methodId, label) in comparisonMethods {
             if let rate = calculateKgChangePerDay(
