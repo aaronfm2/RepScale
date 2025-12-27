@@ -9,8 +9,9 @@ struct AdaptiveCalorieTrackerApp: App {
             WeightEntry.self,
             Workout.self,
             ExerciseEntry.self,
-            WorkoutTemplate.self,       // <--- Added
-            TemplateExerciseEntry.self  // <--- Added
+            WorkoutTemplate.self,
+            TemplateExerciseEntry.self,
+            ExerciseDefinition.self // <--- Added
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

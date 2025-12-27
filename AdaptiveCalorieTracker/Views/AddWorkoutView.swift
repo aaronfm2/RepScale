@@ -67,7 +67,6 @@ struct AddWorkoutView: View {
                             VStack(alignment: .leading) {
                                 Text(ex.name).font(.headline)
                                 
-                                // --- Display Logic for List ---
                                 if ex.isCardio {
                                     HStack(spacing: 8) {
                                         if let dist = ex.distance, dist > 0 {
@@ -152,7 +151,8 @@ struct AddWorkoutView: View {
                 }
             }
             .sheet(isPresented: $showAddExerciseSheet) {
-                AddExerciseSheet(exercises: $tempExercises)
+                // Pass the workout's selected muscles to the sheet for filtering
+                AddExerciseSheet(exercises: $tempExercises, workoutMuscles: selectedMuscles)
             }
             .sheet(isPresented: $showLoadTemplateSheet) {
                 LoadTemplateSheet(templates: templates) { selectedTemplate in
@@ -178,35 +178,17 @@ struct AddWorkoutView: View {
         }
     }
     
-    // MARK: - Logic
-    
+    // (Helper functions duplicateExercise, saveAsTemplate, loadTemplate, saveWorkout remain unchanged)
     func duplicateExercise(_ ex: ExerciseEntry) {
-        let newEx = ExerciseEntry(
-            name: ex.name,
-            reps: ex.reps,
-            weight: ex.weight,
-            duration: ex.duration,
-            distance: ex.distance,
-            isCardio: ex.isCardio,
-            note: ex.note
-        )
+        let newEx = ExerciseEntry(name: ex.name, reps: ex.reps, weight: ex.weight, duration: ex.duration, distance: ex.distance, isCardio: ex.isCardio, note: ex.note)
         tempExercises.append(newEx)
     }
     
     func saveAsTemplate() {
         guard !newTemplateName.isEmpty else { return }
         let template = WorkoutTemplate(name: newTemplateName, category: category, muscleGroups: Array(selectedMuscles))
-        
         let templateExercises = tempExercises.map { ex in
-            TemplateExerciseEntry(
-                name: ex.name,
-                reps: ex.reps,
-                weight: ex.weight,
-                duration: ex.duration,
-                distance: ex.distance,
-                isCardio: ex.isCardio,
-                note: ex.note
-            )
+            TemplateExerciseEntry(name: ex.name, reps: ex.reps, weight: ex.weight, duration: ex.duration, distance: ex.distance, isCardio: ex.isCardio, note: ex.note)
         }
         template.exercises = templateExercises
         modelContext.insert(template)
@@ -215,17 +197,8 @@ struct AddWorkoutView: View {
     func loadTemplate(_ template: WorkoutTemplate) {
         category = template.category
         selectedMuscles = Set(template.muscleGroups)
-        
         let newExercises = template.exercises.map { tex in
-            ExerciseEntry(
-                name: tex.name,
-                reps: tex.reps,
-                weight: tex.weight,
-                duration: tex.duration,
-                distance: tex.distance,
-                isCardio: tex.isCardio,
-                note: tex.note
-            )
+            ExerciseEntry(name: tex.name, reps: tex.reps, weight: tex.weight, duration: tex.duration, distance: tex.distance, isCardio: tex.isCardio, note: tex.note)
         }
         tempExercises.append(contentsOf: newExercises)
         showLoadTemplateSheet = false
@@ -247,26 +220,23 @@ struct AddWorkoutView: View {
     }
 }
 
-// MARK: - Add Exercise Sheet (Updated for Cardio)
+// MARK: - Updated Add Exercise Sheet with Library Support
 
 struct AddExerciseSheet: View {
     @Binding var exercises: [ExerciseEntry]
+    var workoutMuscles: Set<String> // Passed in context
+    
     @Environment(\.dismiss) var dismiss
+    @Query(sort: \ExerciseDefinition.name) private var libraryExercises: [ExerciseDefinition]
     
     @State private var name = ""
     @State private var note = ""
-    
-    // Type Toggle
     @State private var exerciseType: ExerciseType = .strength
     
-    // Strength Inputs
     @State private var reps = ""
     @State private var weight = ""
-    
-    // Cardio Inputs
     @State private var duration = ""
     @State private var distance = ""
-    
     @State private var setCount = 1
     
     enum ExerciseType: String, CaseIterable {
@@ -278,7 +248,38 @@ struct AddExerciseSheet: View {
         NavigationView {
             Form {
                 Section("Details") {
-                    TextField("Exercise Name (e.g. Run or Bench Press)", text: $name)
+                    HStack {
+                        TextField("Exercise Name (e.g. Bench Press)", text: $name)
+                        
+                        // --- NEW: Library Menu ---
+                        if !libraryExercises.isEmpty {
+                            Menu {
+                                // Smart Grouping: Recommended (matches muscles) vs Others
+                                let recommended = libraryExercises.filter { !Set($0.muscleGroups).isDisjoint(with: workoutMuscles) }
+                                let others = libraryExercises.filter { Set($0.muscleGroups).isDisjoint(with: workoutMuscles) }
+                                
+                                if !recommended.isEmpty {
+                                    Section("Recommended") {
+                                        ForEach(recommended) { ex in
+                                            Button(ex.name) { selectFromLibrary(ex) }
+                                        }
+                                    }
+                                }
+                                
+                                if !others.isEmpty {
+                                    Section("All Exercises") {
+                                        ForEach(others) { ex in
+                                            Button(ex.name) { selectFromLibrary(ex) }
+                                        }
+                                    }
+                                }
+                                
+                            } label: {
+                                Image(systemName: "book.circle")
+                                    .font(.title2)
+                            }
+                        }
+                    }
                     
                     Picker("Type", selection: $exerciseType) {
                         ForEach(ExerciseType.allCases, id: \.self) { type in
@@ -344,15 +345,17 @@ struct AddExerciseSheet: View {
         }
     }
     
+    func selectFromLibrary(_ ex: ExerciseDefinition) {
+        self.name = ex.name
+        self.exerciseType = ex.isCardio ? .cardio : .strength
+    }
+    
     func saveExercises() {
         let isCardio = (exerciseType == .cardio)
         let rVal = Int(reps)
         let wVal = Double(weight)
         let durVal = Double(duration)
         let distVal = Double(distance)
-        
-        // Validation: Strength needs reps/weight (or just one), Cardio needs time/dist
-        // We'll be lenient and allow 0s, but Name is required
         
         for _ in 0..<setCount {
             let newEx = ExerciseEntry(

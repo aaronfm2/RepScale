@@ -7,9 +7,9 @@ struct WorkoutTabView: View {
     
     @State private var showingAddWorkout = false
     @State private var showingSettings = false
+    @State private var showingLibrary = false // --- NEW STATE ---
     @State private var workoutToEdit: Workout? = nil
     
-    // Muscles the user cares about tracking (saved in UserDefaults)
     @AppStorage("trackedMuscles") private var trackedMusclesString: String = "Chest,Back,Legs"
     
     var trackedMuscles: [String] {
@@ -46,7 +46,7 @@ struct WorkoutTabView: View {
                         .font(.caption)
                 }
                 
-                // 3. Recent Workouts (Swipeable)
+                // 3. Recent Workouts
                 Section(header: Text("Recent Workouts")) {
                     if workouts.isEmpty {
                         Text("No workouts yet. Tap + to add.")
@@ -62,7 +62,6 @@ struct WorkoutTabView: View {
                                             .font(.caption).foregroundColor(.secondary)
                                     }
                                     Spacer()
-                                    // Badge Style
                                     Text(workout.muscleGroups.joined(separator: ", "))
                                         .font(.caption)
                                         .padding(.horizontal, 8)
@@ -93,12 +92,21 @@ struct WorkoutTabView: View {
             .listStyle(.insetGrouped)
             .navigationTitle("Workouts")
             .toolbar {
-                Button(action: {
-                    workoutToEdit = nil
-                    showingAddWorkout = true
-                }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title2)
+                // --- NEW: Library Button ---
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { showingLibrary = true }) {
+                        Image(systemName: "dumbbell")
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        workoutToEdit = nil
+                        showingAddWorkout = true
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title2)
+                    }
                 }
             }
             .sheet(isPresented: $showingAddWorkout) {
@@ -106,6 +114,9 @@ struct WorkoutTabView: View {
             }
             .sheet(isPresented: $showingSettings) {
                 MuscleSelectionView(selectedMusclesString: $trackedMusclesString)
+            }
+            .sheet(isPresented: $showingLibrary) {
+                ExerciseLibraryView()
             }
         }
     }
