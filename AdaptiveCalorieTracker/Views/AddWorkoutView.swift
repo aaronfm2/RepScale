@@ -24,9 +24,28 @@ struct AddWorkoutView: View {
     let categories = ["Push", "Pull", "Legs", "Upper", "Lower", "Full Body", "Cardio", "Chest", "Arms", "Back", "Shoulders", "Abs"]
     let muscles = ["Chest", "Back", "Legs", "Shoulders", "Biceps", "Triceps", "Abs", "Cardio"]
     
+    // --- Helper for Grouping ---
+    struct ExerciseGroup {
+        let name: String
+        var exercises: [ExerciseEntry]
+    }
+    
+    var groupedExercises: [ExerciseGroup] {
+        var groups: [ExerciseGroup] = []
+        for exercise in tempExercises {
+            if let index = groups.firstIndex(where: { $0.name == exercise.name }) {
+                groups[index].exercises.append(exercise)
+            } else {
+                groups.append(ExerciseGroup(name: exercise.name, exercises: [exercise]))
+            }
+        }
+        return groups
+    }
+    
     var body: some View {
         NavigationView {
             Form {
+                // MARK: - Session Details
                 Section("Session Details") {
                     DatePicker("Date", selection: $date, displayedComponents: .date)
                     
@@ -57,60 +76,60 @@ struct AddWorkoutView: View {
                     }
                 }
                 
-                Section {
-                    if tempExercises.isEmpty {
+                // MARK: - Exercises List (Editable)
+                if tempExercises.isEmpty {
+                    Section {
                         Text("No exercises added yet.")
                             .foregroundColor(.secondary)
                             .italic()
-                    } else {
-                        ForEach(Array(tempExercises.enumerated()), id: \.offset) { index, ex in
-                            VStack(alignment: .leading) {
-                                Text(ex.name).font(.headline)
-                                
-                                if ex.isCardio {
-                                    HStack(spacing: 8) {
-                                        if let dist = ex.distance, dist > 0 {
-                                            Label("\(dist, specifier: "%.2f") km", systemImage: "location.fill")
-                                        }
-                                        if let time = ex.duration, time > 0 {
-                                            Label("\(Int(time)) min", systemImage: "clock.fill")
-                                        }
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding()
+                    }
+                } else {
+                    ForEach(groupedExercises, id: \.name) { group in
+                        Section {
+                            ForEach(Array(group.exercises.enumerated()), id: \.element) { index, ex in
+                                // Use Bindable to make the exercise editable in place
+                                EditExerciseRow(exercise: ex, index: index)
+                                .swipeActions(edge: .leading) {
+                                    Button {
+                                        duplicateExercise(ex)
+                                    } label: {
+                                        Label("Copy", systemImage: "plus.square.on.square")
                                     }
-                                    .font(.subheadline).foregroundColor(.blue)
-                                } else {
-                                    Text("\(ex.reps ?? 0) reps @ \(ex.weight ?? 0.0, specifier: "%.1f") kg")
-                                        .font(.subheadline).foregroundColor(.secondary)
-                                }
-                                
-                                if !ex.note.isEmpty {
-                                    Text(ex.note).font(.caption).italic()
+                                    .tint(.blue)
                                 }
                             }
-                            .swipeActions(edge: .leading) {
-                                Button {
-                                    duplicateExercise(ex)
-                                } label: {
-                                    Label("Duplicate Set", systemImage: "plus.square.on.square")
-                                }
-                                .tint(.blue)
+                            .onDelete { indexSet in
+                                deleteFromGroup(group: group, at: indexSet)
                             }
-                        }
-                        .onDelete { indexSet in
-                            tempExercises.remove(atOffsets: indexSet)
+                            
+                            Button(action: { addSet(to: group.name) }) {
+                                Label("Add Set", systemImage: "plus")
+                                    .font(.subheadline)
+                            }
+                            
+                        } header: {
+                            HStack {
+                                Text(group.name)
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Text("\(group.exercises.count) sets")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .textCase(nil)
+                            }
                         }
                     }
-                    
+                }
+                
+                // MARK: - Add New Exercise Button
+                Section {
                     Button(action: { showAddExerciseSheet = true }) {
-                        Label("Add Exercise", systemImage: "dumbbell.fill")
-                    }
-                } header: {
-                    HStack {
-                        Text("Exercises")
-                        Spacer()
-                        Text("Swipe right to duplicate set")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .textCase(nil)
+                        Label("Add New Exercise", systemImage: "dumbbell.fill")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, alignment: .center)
                     }
                 }
                 
@@ -151,7 +170,6 @@ struct AddWorkoutView: View {
                 }
             }
             .sheet(isPresented: $showAddExerciseSheet) {
-                // Pass the workout's selected muscles to the sheet for filtering
                 AddExerciseSheet(exercises: $tempExercises, workoutMuscles: selectedMuscles)
             }
             .sheet(isPresented: $showLoadTemplateSheet) {
@@ -178,10 +196,54 @@ struct AddWorkoutView: View {
         }
     }
     
-    // (Helper functions duplicateExercise, saveAsTemplate, loadTemplate, saveWorkout remain unchanged)
+    // MARK: - Logic Helpers (Unchanged)
+    
+    func deleteFromGroup(group: ExerciseGroup, at offsets: IndexSet) {
+        let exercisesToDelete = offsets.map { group.exercises[$0] }
+        tempExercises.removeAll { ex in
+            exercisesToDelete.contains(where: { $0 === ex })
+        }
+    }
+    
+    func addSet(to groupName: String) {
+        if let lastIndex = tempExercises.lastIndex(where: { $0.name == groupName }) {
+            let ex = tempExercises[lastIndex]
+            let newEx = ExerciseEntry(
+                name: ex.name,
+                reps: ex.reps,
+                weight: ex.weight,
+                duration: ex.duration,
+                distance: ex.distance,
+                isCardio: ex.isCardio,
+                note: ""
+            )
+            if lastIndex + 1 < tempExercises.count {
+                tempExercises.insert(newEx, at: lastIndex + 1)
+            } else {
+                tempExercises.append(newEx)
+            }
+        }
+    }
+    
     func duplicateExercise(_ ex: ExerciseEntry) {
-        let newEx = ExerciseEntry(name: ex.name, reps: ex.reps, weight: ex.weight, duration: ex.duration, distance: ex.distance, isCardio: ex.isCardio, note: ex.note)
-        tempExercises.append(newEx)
+        let newEx = ExerciseEntry(
+            name: ex.name,
+            reps: ex.reps,
+            weight: ex.weight,
+            duration: ex.duration,
+            distance: ex.distance,
+            isCardio: ex.isCardio,
+            note: ex.note
+        )
+        if let index = tempExercises.firstIndex(of: ex) {
+            if index + 1 < tempExercises.count {
+                tempExercises.insert(newEx, at: index + 1)
+            } else {
+                tempExercises.append(newEx)
+            }
+        } else {
+            tempExercises.append(newEx)
+        }
     }
     
     func saveAsTemplate() {
@@ -220,11 +282,81 @@ struct AddWorkoutView: View {
     }
 }
 
+// MARK: - Subview for Editable Row
+// We extract this to use @Bindable safely on the Model class
+struct EditExerciseRow: View {
+    @Bindable var exercise: ExerciseEntry
+    let index: Int
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Set \(index + 1)")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+                    .frame(width: 45, alignment: .leading)
+                
+                Divider()
+                
+                if exercise.isCardio {
+                    HStack {
+                        TextField("Dist", value: $exercise.distance, format: .number)
+                            .keyboardType(.decimalPad)
+                            .frame(width: 60)
+                        Text("km")
+                        Spacer()
+                        TextField("Time", value: $exercise.duration, format: .number)
+                            .keyboardType(.numberPad)
+                            .frame(width: 60)
+                        Text("min")
+                    }
+                    .foregroundColor(.blue)
+                } else {
+                    HStack {
+                        TextField("Reps", value: $exercise.reps, format: .number)
+                            .keyboardType(.numberPad)
+                            .frame(width: 40)
+                            .multilineTextAlignment(.trailing)
+                            .padding(4)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(5)
+                        
+                        Text("reps").font(.caption).foregroundColor(.secondary)
+                        
+                        Spacer()
+                        Text("x").foregroundColor(.secondary)
+                        Spacer()
+                        
+                        TextField("Weight", value: $exercise.weight, format: .number)
+                            .keyboardType(.decimalPad)
+                            .frame(width: 60)
+                            .multilineTextAlignment(.trailing)
+                            .padding(4)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(5)
+                        
+                        Text("kg").font(.caption).foregroundColor(.secondary)
+                    }
+                }
+            }
+            
+            // Optional Note Field
+            TextField("Add note...", text: $exercise.note)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.leading, 60)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
 // MARK: - Updated Add Exercise Sheet with Library Support
+// (Note: This struct remains largely unchanged, just ensuring context access)
 
 struct AddExerciseSheet: View {
     @Binding var exercises: [ExerciseEntry]
-    var workoutMuscles: Set<String> // Passed in context
+    var workoutMuscles: Set<String>
     
     @Environment(\.dismiss) var dismiss
     @Query(sort: \ExerciseDefinition.name) private var libraryExercises: [ExerciseDefinition]
@@ -251,10 +383,8 @@ struct AddExerciseSheet: View {
                     HStack {
                         TextField("Exercise Name (e.g. Bench Press)", text: $name)
                         
-                        // --- NEW: Library Menu ---
                         if !libraryExercises.isEmpty {
                             Menu {
-                                // Smart Grouping: Recommended (matches muscles) vs Others
                                 let recommended = libraryExercises.filter { !Set($0.muscleGroups).isDisjoint(with: workoutMuscles) }
                                 let others = libraryExercises.filter { Set($0.muscleGroups).isDisjoint(with: workoutMuscles) }
                                 
@@ -373,7 +503,7 @@ struct AddExerciseSheet: View {
     }
 }
 
-// Template Loader (Same as before)
+// Template Loader (Unchanged)
 struct LoadTemplateSheet: View {
     let templates: [WorkoutTemplate]
     let onSelect: (WorkoutTemplate) -> Void

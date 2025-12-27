@@ -7,6 +7,18 @@ struct LogDetailView: View {
     
     @AppStorage("enableCaloriesBurned") private var enableCaloriesBurned: Bool = true
     
+    func groupExercises(_ exercises: [ExerciseEntry]) -> [(name: String, sets: [ExerciseEntry])] {
+        var groups: [(name: String, sets: [ExerciseEntry])] = []
+        for exercise in exercises {
+            if let last = groups.last, last.name == exercise.name {
+                groups[groups.count - 1].sets.append(exercise)
+            } else {
+                groups.append((name: exercise.name, sets: [exercise]))
+            }
+        }
+        return groups
+    }
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
@@ -99,7 +111,6 @@ struct LogDetailView: View {
     
     private func workoutCard(for w: Workout) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Header: Category & Muscles
             HStack {
                 VStack(alignment: .leading) {
                     Text(w.category)
@@ -122,8 +133,19 @@ struct LogDetailView: View {
                 Text("No exercises logged.")
                     .font(.caption).italic().foregroundColor(.secondary)
             } else {
-                ForEach(w.exercises) { exercise in
-                    exerciseRow(for: exercise)
+                let grouped = groupExercises(w.exercises)
+                ForEach(grouped, id: \.name) { group in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(group.name)
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                            .padding(.top, 4)
+                        
+                        ForEach(Array(group.sets.enumerated()), id: \.element) { index, exercise in
+                            exerciseRow(for: exercise, setNumber: index + 1)
+                        }
+                    }
+                    .padding(.bottom, 4)
                 }
             }
             
@@ -138,36 +160,47 @@ struct LogDetailView: View {
         .padding(.horizontal)
     }
     
-    private func exerciseRow(for exercise: ExerciseEntry) -> some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text(exercise.name).fontWeight(.medium)
-                if !exercise.note.isEmpty {
-                    Text(exercise.note).font(.caption2).foregroundColor(.secondary)
+    private func exerciseRow(for exercise: ExerciseEntry, setNumber: Int) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Set \(setNumber)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(width: 40, alignment: .leading)
+                
+                Divider()
+                    .frame(height: 15)
+                
+                if exercise.isCardio {
+                    HStack(spacing: 8) {
+                        if let dist = exercise.distance, dist > 0 {
+                            Text("\(dist, specifier: "%.2f") km")
+                        }
+                        if let time = exercise.duration, time > 0 {
+                            Text("\(Int(time)) min")
+                        }
+                    }
+                    .font(.callout).monospacedDigit().foregroundColor(.blue)
+                } else {
+                    Text("\(exercise.reps ?? 0) x \(exercise.weight ?? 0.0, specifier: "%.1f") kg")
+                        .font(.callout).monospacedDigit()
                 }
+                
+                Spacer()
             }
-            Spacer()
             
-            if exercise.isCardio {
-                VStack(alignment: .trailing) {
-                    if let dist = exercise.distance, dist > 0 {
-                        Text("\(dist, specifier: "%.2f") km")
-                    }
-                    if let time = exercise.duration, time > 0 {
-                        Text("\(Int(time)) min")
-                    }
-                }
-                .font(.callout).monospacedDigit().foregroundColor(.blue)
-            } else {
-                Text("\(exercise.reps ?? 0) x \(exercise.weight ?? 0.0, specifier: "%.1f")kg")
-                    .font(.callout).monospacedDigit()
+            // --- CHANGED: Display note text here ---
+            if !exercise.note.isEmpty {
+                Text(exercise.note)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.leading, 50)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
 }
 
-// Helper View for Macros
 struct MacroCard: View {
     let title: String
     let value: Int?

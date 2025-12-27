@@ -4,6 +4,19 @@ struct WorkoutDetailView: View {
     let workout: Workout
     @State private var isEditing = false
     
+    // Helper to group exercises by name while keeping order
+    var groupedExercises: [(name: String, sets: [ExerciseEntry])] {
+        var groups: [(name: String, sets: [ExerciseEntry])] = []
+        for exercise in workout.exercises {
+            if let last = groups.last, last.name == exercise.name {
+                groups[groups.count - 1].sets.append(exercise)
+            } else {
+                groups.append((name: exercise.name, sets: [exercise]))
+            }
+        }
+        return groups
+    }
+    
     var body: some View {
         List {
             Section("Summary") {
@@ -33,32 +46,57 @@ struct WorkoutDetailView: View {
                 if workout.exercises.isEmpty {
                     Text("No exercises logged").italic().foregroundColor(.secondary)
                 } else {
-                    ForEach(workout.exercises) { exercise in
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(exercise.name).font(.headline)
-                                if !exercise.note.isEmpty {
-                                    Text(exercise.note).font(.caption).foregroundColor(.secondary)
-                                }
-                            }
-                            Spacer()
+                    // Iterate over the GROUPS
+                    ForEach(groupedExercises, id: \.name) { group in
+                        VStack(alignment: .leading, spacing: 8) {
+                            // Parent Header
+                            Text(group.name)
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                                .padding(.vertical, 4)
                             
-                            // --- NEW: Display Logic ---
-                            if exercise.isCardio {
-                                VStack(alignment: .trailing) {
-                                    if let dist = exercise.distance, dist > 0 {
-                                        Text("\(dist, specifier: "%.2f") km")
+                            // Child Rows (Sets)
+                            ForEach(Array(group.sets.enumerated()), id: \.element) { index, exercise in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text("Set \(index + 1)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .frame(width: 40, alignment: .leading)
+                                        
+                                        Divider()
+                                            .frame(height: 15)
+                                        
+                                        if exercise.isCardio {
+                                            HStack(spacing: 8) {
+                                                if let dist = exercise.distance, dist > 0 {
+                                                    Text("\(dist, specifier: "%.2f") km")
+                                                }
+                                                if let time = exercise.duration, time > 0 {
+                                                    Text("\(Int(time)) min")
+                                                }
+                                            }
+                                            .font(.callout).monospacedDigit().foregroundColor(.blue)
+                                        } else {
+                                            Text("\(exercise.reps ?? 0) x \(exercise.weight ?? 0.0, specifier: "%.1f") kg")
+                                                .monospacedDigit()
+                                        }
+                                        
+                                        Spacer()
                                     }
-                                    if let time = exercise.duration, time > 0 {
-                                        Text("\(Int(time)) min")
+                                    
+                                    // --- CHANGED: Display note text here ---
+                                    if !exercise.note.isEmpty {
+                                        Text(exercise.note)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .padding(.leading, 50) // Indent to align with details
                                     }
                                 }
-                                .font(.callout).monospacedDigit().foregroundColor(.blue)
-                            } else {
-                                Text("\(exercise.reps ?? 0) x \(exercise.weight ?? 0.0, specifier: "%.1f")")
-                                    .monospacedDigit()
+                                .padding(.vertical, 2)
                             }
                         }
+                        .padding(.vertical, 4)
                     }
                 }
             }
