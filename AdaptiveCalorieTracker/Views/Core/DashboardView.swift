@@ -47,9 +47,13 @@ struct DashboardView: View {
                 .padding()
             }
             .navigationTitle("Dashboard")
+            .navigationBarTitleDisplayMode(.inline) // Optional: Makes title small and centered
             .toolbar {
-                Button(action: { showingSettings = true }) {
-                    Image(systemName: "gearshape.fill")
+                // Change placement: .navigationBarLeading (left) or .navigationBarTrailing (right)
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { showingSettings = true }) {
+                        Image(systemName: "gearshape.fill")
+                    }
                 }
             }
             .sheet(isPresented: $showingSettings) {

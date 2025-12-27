@@ -47,7 +47,8 @@ struct WeightTrackerView: View {
                     newWeight = ""
                     showingAddWeight = true
                 }) {
-                    Image(systemName: "plus")
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title2)
                 }
             }
             .sheet(isPresented: $showingAddWeight) {

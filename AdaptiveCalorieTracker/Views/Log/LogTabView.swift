@@ -60,7 +60,8 @@ struct ContentView: View {
                         inputMode = 0
                         showingLogSheet = true
                     }) {
-                        Label("Add Log", systemImage: "plus")
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title2)
                     }
                 }
             }
