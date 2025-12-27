@@ -218,11 +218,25 @@ struct ContentView: View {
     }
     
     private func setupOnAppear() {
-        // Request auth if not already granted.
-        // It is safe to call this multiple times.
-        healthManager.requestAuthorization()
-        healthManager.fetchAllHealthData()
-    }
+            // 1. Request Auth & Fetch
+            healthManager.requestAuthorization()
+            healthManager.fetchAllHealthData()
+            
+            // 2. FORCE SYNC: Check if data is already there and save it immediately
+            if healthManager.caloriesConsumedToday > 0 {
+                updateTodayLog { $0.caloriesConsumed = Int(healthManager.caloriesConsumedToday) }
+            }
+            
+            // Sync Calories Burned (checking > 0 just in case, or allow 0 if that's preferred)
+            if enableCaloriesBurned {
+                updateTodayLog { $0.caloriesBurned = Int(healthManager.caloriesBurnedToday) }
+            }
+            
+            // Sync Macros
+            if healthManager.proteinToday > 0 { updateTodayLog { $0.protein = Int(healthManager.proteinToday) } }
+            if healthManager.carbsToday > 0 { updateTodayLog { $0.carbs = Int(healthManager.carbsToday) } }
+            if healthManager.fatToday > 0 { updateTodayLog { $0.fat = Int(healthManager.fatToday) } }
+        }
     
     private func updateTodayLog(update: (DailyLog) -> Void) {
         let todayDate = Calendar.current.startOfDay(for: Date())
