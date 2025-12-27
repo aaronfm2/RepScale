@@ -11,7 +11,8 @@ struct DashboardView: View {
     // Fetch weights for the graph (Reverse order so first is latest)
     @Query(sort: \WeightEntry.date, order: .reverse) private var weights: [WeightEntry]
     
-    @StateObject var healthManager = HealthManager()
+    // --- CHANGED: Use the shared EnvironmentObject ---
+    @EnvironmentObject var healthManager: HealthManager
     
     // --- VIEW MODEL ---
     @State private var viewModel = DashboardViewModel()
@@ -344,8 +345,9 @@ struct DashboardView: View {
     }
 
     private func setupOnAppear() {
-        healthManager.requestAuthorization()
-        healthManager.fetchTodayCaloriesBurned()
+        // --- CHANGED: Don't request auth here if the App entry point does it.
+        // But refreshing data is fine.
+        healthManager.fetchAllHealthData()
         
         let today = Calendar.current.startOfDay(for: Date())
         if !logs.contains(where: { $0.date == today }) {

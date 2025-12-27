@@ -12,6 +12,11 @@ struct WeightTrackerView: View {
     @State private var newWeight: String = ""
     @State private var selectedDate: Date = Date()
 
+    // Helper to initialize DataManager with the current context
+    private var dataManager: DataManager {
+        DataManager(modelContext: modelContext)
+    }
+
     var body: some View {
         NavigationView {
             List {
@@ -76,49 +81,23 @@ struct WeightTrackerView: View {
     private func saveWeight() {
         guard let weightDouble = Double(newWeight) else { return }
         
-        // 1. Save to Weight History (The list you see in this tab)
-        let entry = WeightEntry(date: selectedDate, weight: weightDouble)
-        modelContext.insert(entry)
-        
-        // 2. SYNC to Daily Log (The list you see in "Logs" tab)
-        syncToDailyLog(date: selectedDate, weight: weightDouble)
+        // --- CHANGED: Use DataManager ---
+        // This handles both inserting the weight AND syncing it to the DailyLog
+        dataManager.addWeightEntry(date: selectedDate, weight: weightDouble, goalType: currentGoalType)
         
         // Reset and close
         newWeight = ""
         showingAddWeight = false
     }
 
-    private func syncToDailyLog(date: Date, weight: Double) {
-        let normalizedDate = Calendar.current.startOfDay(for: date)
-        
-        let fetchDescriptor = FetchDescriptor<DailyLog>(
-            predicate: #Predicate { $0.date == normalizedDate }
-        )
-        
-        do {
-            if let existingLog = try modelContext.fetch(fetchDescriptor).first {
-                existingLog.weight = weight
-                
-                // --- FIX: Backfill Goal Type if missing ---
-                if existingLog.goalType == nil {
-                    existingLog.goalType = currentGoalType
-                }
-                // ------------------------------------------
-                
-            } else {
-                // Include goalType when creating new log
-                let newLog = DailyLog(date: normalizedDate, weight: weight, goalType: currentGoalType)
-                modelContext.insert(newLog)
-            }
-        } catch {
-            print("Failed to sync weight to daily log: \(error)")
-        }
-    }
-
     private func deleteWeight(offsets: IndexSet) {
         withAnimation {
             for index in offsets {
-                modelContext.delete(weights[index])
+                let weightToDelete = weights[index]
+                
+                // --- CHANGED: Use DataManager ---
+                // This deletes the weight AND fixes the DailyLog if necessary
+                dataManager.deleteWeightEntry(weightToDelete)
             }
         }
     }

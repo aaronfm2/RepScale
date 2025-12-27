@@ -8,7 +8,9 @@ struct ContentView: View {
     // Fetch workouts to link them to logs
     @Query(sort: \Workout.date, order: .reverse) private var workouts: [Workout]
     
-    @StateObject var healthManager = HealthManager()
+    // --- CHANGED: Uses EnvironmentObject (Source of truth is now in App.swift) ---
+    @EnvironmentObject var healthManager: HealthManager
+    
     @AppStorage("dailyCalorieGoal") private var dailyGoal: Int = 2000
     @AppStorage("goalType") private var currentGoalType: String = GoalType.cutting.rawValue
     
@@ -33,7 +35,6 @@ struct ContentView: View {
                 
                 List {
                     ForEach(logs) { log in
-                        // --- NAVIGATION LINK ---
                         // Update: Pass ALL workouts found for this date
                         NavigationLink(destination: LogDetailView(
                             log: log,
@@ -96,7 +97,6 @@ struct ContentView: View {
 
     // MARK: - Helper Methods
     
-    // --- FIX: Return [Workout] instead of Workout? ---
     private func getWorkouts(for date: Date) -> [Workout] {
         workouts.filter { Calendar.current.isDate($0.date, inSameDayAs: date) }
     }
@@ -203,6 +203,8 @@ struct ContentView: View {
     }
     
     private func setupOnAppear() {
+        // Request auth if not already granted.
+        // It is safe to call this multiple times.
         healthManager.requestAuthorization()
         healthManager.fetchAllHealthData()
     }
@@ -257,7 +259,7 @@ struct ContentView: View {
                     if let goal = log.goalType {
                         Text("(\(goal))").font(.caption2).padding(2).background(Color.gray.opacity(0.1)).cornerRadius(4)
                     }
-                    // --- FIX: Iterate over all workouts found ---
+                    
                     ForEach(dailyWorkouts) { w in
                         Text("• \(w.category)").font(.caption2).foregroundColor(.blue)
                     }

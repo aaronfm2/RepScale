@@ -3,6 +3,7 @@ import SwiftData
 
 @main
 struct AdaptiveCalorieTrackerApp: App {
+    @StateObject private var healthManager = HealthManager()
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             DailyLog.self,
@@ -25,6 +26,7 @@ struct AdaptiveCalorieTrackerApp: App {
     var body: some Scene {
         WindowGroup {
             MainTabView()
+                .environmentObject(healthManager)
         }
         .modelContainer(sharedModelContainer)
     }
