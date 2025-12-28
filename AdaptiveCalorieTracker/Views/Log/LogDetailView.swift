@@ -10,8 +10,18 @@ struct LogDetailView: View {
     @AppStorage("enableCaloriesBurned") private var enableCaloriesBurned: Bool = true
     
     @AppStorage("isCalorieCountingEnabled") private var isCalorieCountingEnabled: Bool = true
-    
     @State private var showingEditOverrides = false
+    
+    // MARK: - Dark Mode & Colors
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
+
+    var appBackgroundColor: Color {
+        isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
+    }
+    
+    var cardBackgroundColor: Color {
+        isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
+    }
     
     func groupExercises(_ exercises: [ExerciseEntry]) -> [(name: String, sets: [ExerciseEntry])] {
         var groups: [(name: String, sets: [ExerciseEntry])] = []
@@ -41,6 +51,7 @@ struct LogDetailView: View {
             }
             .padding(.bottom, 30)
         }
+        .background(appBackgroundColor) // Apply Main Background
         .navigationTitle("Daily Summary")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -127,9 +138,9 @@ struct LogDetailView: View {
             Text("Nutrition Total").font(.headline)
             
             HStack(spacing: 20) {
-                MacroCard(title: "Protein", value: log.protein, color: .red)
-                MacroCard(title: "Carbs", value: log.carbs, color: .blue)
-                MacroCard(title: "Fats", value: log.fat, color: .yellow)
+                MacroCard(title: "Protein", value: log.protein, color: .red, backgroundColor: isDarkMode ? Color.gray.opacity(0.1) : Color(uiColor: .tertiarySystemGroupedBackground))
+                MacroCard(title: "Carbs", value: log.carbs, color: .blue, backgroundColor: isDarkMode ? Color.gray.opacity(0.1) : Color(uiColor: .tertiarySystemGroupedBackground))
+                MacroCard(title: "Fats", value: log.fat, color: .yellow, backgroundColor: isDarkMode ? Color.gray.opacity(0.1) : Color(uiColor: .tertiarySystemGroupedBackground))
             }
             
             Divider()
@@ -155,8 +166,8 @@ struct LogDetailView: View {
             }
         }
         .padding()
-        // --- FIXED: Use adaptive background for container ---
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color(uiColor: .secondarySystemGroupedBackground)))
+        // Apply Card Background
+        .background(RoundedRectangle(cornerRadius: 12).fill(cardBackgroundColor))
         .padding(.horizontal)
     }
     
@@ -219,8 +230,8 @@ struct LogDetailView: View {
             }
         }
         .padding()
-        // --- FIXED: Use adaptive background ---
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color(uiColor: .secondarySystemGroupedBackground)))
+        // Apply Card Background
+        .background(RoundedRectangle(cornerRadius: 12).fill(cardBackgroundColor))
         .padding(.horizontal)
     }
     
@@ -328,6 +339,7 @@ struct MacroCard: View {
     let title: String
     let value: Int?
     let color: Color
+    let backgroundColor: Color
     
     var body: some View {
         VStack(spacing: 8) {
@@ -340,8 +352,7 @@ struct MacroCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
-        // --- FIXED: Replaced Color.white with adaptive system background ---
-        .background(Color(uiColor: .tertiarySystemGroupedBackground))
+        .background(backgroundColor)
         .cornerRadius(10)
         .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
     }

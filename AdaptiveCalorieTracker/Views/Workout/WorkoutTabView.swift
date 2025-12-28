@@ -12,6 +12,17 @@ struct WorkoutTabView: View {
     
     @AppStorage("trackedMuscles") private var trackedMusclesString: String = "Chest,Back,Legs,Shoulders,Abs,Cardio,Biceps,Triceps"
     
+    // MARK: - Dark Mode & Colors
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
+
+    var appBackgroundColor: Color {
+        isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
+    }
+    
+    var cardBackgroundColor: Color {
+        isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
+    }
+    
     var trackedMuscles: [String] {
         trackedMusclesString.components(separatedBy: ",").filter { !$0.isEmpty }
     }
@@ -25,7 +36,7 @@ struct WorkoutTabView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 5)
                 }
-                .listRowBackground(Color.clear)
+                .listRowBackground(Color.clear) // Clear so the Calendar's internal card background shows
                 .listRowInsets(EdgeInsets())
                 
                 // 2. Recovery Counters
@@ -33,6 +44,7 @@ struct WorkoutTabView: View {
                     if trackedMuscles.isEmpty {
                         Text("Select muscles to track recovery time.")
                             .font(.caption).foregroundColor(.secondary)
+                            .listRowBackground(cardBackgroundColor)
                     } else {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 150))], spacing: 15) {
                             ForEach(trackedMuscles, id: \.self) { muscle in
@@ -40,10 +52,12 @@ struct WorkoutTabView: View {
                             }
                         }
                         .padding(.vertical, 5)
+                        .listRowBackground(Color.clear)
                     }
                     
                     Button("Select Muscles") { showingSettings = true }
                         .font(.caption)
+                        .listRowBackground(cardBackgroundColor)
                 }
                 
                 // 3. Recent Workouts
@@ -51,6 +65,7 @@ struct WorkoutTabView: View {
                     if workouts.isEmpty {
                         Text("No workouts yet. Tap + to add.")
                             .foregroundColor(.secondary)
+                            .listRowBackground(cardBackgroundColor)
                     } else {
                         ForEach(workouts) { workout in
                             NavigationLink(destination: WorkoutDetailView(workout: workout)) {
@@ -70,6 +85,7 @@ struct WorkoutTabView: View {
                                         .cornerRadius(8)
                                 }
                             }
+                            .listRowBackground(cardBackgroundColor) // Apply card color to rows
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(role: .destructive) {
                                     deleteWorkout(workout)
@@ -90,6 +106,8 @@ struct WorkoutTabView: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden) // Hides system default
+            .background(appBackgroundColor)   // Applies custom background
             .navigationTitle("Workouts")
             .toolbar {
                 // --- NEW: Library Button ---
@@ -143,6 +161,11 @@ struct RecoveryCard: View {
     let muscle: String
     let days: Int?
     
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
+    var cardBackgroundColor: Color {
+        isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(muscle).font(.headline)
@@ -158,7 +181,7 @@ struct RecoveryCard: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white)
+        .background(cardBackgroundColor) // Updated background
         .cornerRadius(10)
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
     }
@@ -173,6 +196,11 @@ struct WorkoutCalendarView: View {
     // --- UPDATED STATE ---
     @State private var selectedWorkouts: [Workout] = []
     @State private var isNavigating = false
+    
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
+    var cardBackgroundColor: Color {
+        isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
+    }
     
     var body: some View {
         VStack {
@@ -249,7 +277,7 @@ struct WorkoutCalendarView: View {
             }
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(cardBackgroundColor)) // Updated background
         // --- NAVIGATION ---
         .background(
             NavigationLink(

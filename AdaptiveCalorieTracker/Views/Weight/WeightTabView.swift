@@ -9,6 +9,17 @@ struct WeightTrackerView: View {
     // --- NEW ---
     @AppStorage("unitSystem") private var unitSystem: String = UnitSystem.metric.rawValue
     
+    // MARK: - Dark Mode & Colors
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
+
+    var appBackgroundColor: Color {
+        isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
+    }
+    
+    var cardBackgroundColor: Color {
+        isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
+    }
+    
     @State private var showingAddWeight = false
     @State private var newWeight: String = ""
     @State private var selectedDate: Date = Date()
@@ -37,9 +48,12 @@ struct WeightTrackerView: View {
                             .fontWeight(.semibold)
                             .font(.title3)
                     }
+                    .listRowBackground(cardBackgroundColor) // Apply Card Color
                 }
                 .onDelete(perform: deleteWeight)
             }
+            .scrollContentBackground(.hidden) // Hide system default
+            .background(appBackgroundColor)   // Apply Main Background
             .navigationTitle("Weight History")
             .toolbar {
                 Button(action: {
