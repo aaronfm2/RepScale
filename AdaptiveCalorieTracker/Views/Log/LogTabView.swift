@@ -16,18 +16,28 @@ struct ContentView: View {
     @AppStorage("dailyCalorieGoal") private var dailyGoal: Int = 2000
     @AppStorage("goalType") private var currentGoalType: String = GoalType.cutting.rawValue
     @AppStorage("enableCaloriesBurned") private var enableCaloriesBurned: Bool = true
-    
-    // Toggle to control visibility
     @AppStorage("isCalorieCountingEnabled") private var isCalorieCountingEnabled: Bool = true
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
+
+    // MARK: - Color Palette (Two Colors)
+    
+    // 1. Entire Background (#1C1C1E)
+    var appBackgroundColor: Color {
+        // RGB: 28, 28, 30
+        isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
+    }
+    
+    // 2. List Entries (#27272A)
+    var cardBackgroundColor: Color {
+        // RGB: 39, 39, 42 -> ~0.153, 0.153, 0.165
+        isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
+    }
     
     // Sheet State
     @State private var showingLogSheet = false
     @State private var selectedLogDate = Date()
     @State private var inputMode = 0
-    
     @State private var showingInfoAlert = false
-    
-    // Refresh State
     @State private var isRefreshingHistory = false
     
     // Inputs
@@ -37,7 +47,6 @@ struct ContentView: View {
     @State private var fatInput = ""
 
     // MARK: - Computed Properties for Grouping
-    
     struct LogSection: Identifiable {
         var id: Date { month }
         let month: Date
@@ -46,48 +55,40 @@ struct ContentView: View {
     
     var groupedSections: [LogSection] {
         let grouped = Dictionary(grouping: logs) { log in
-            // Group by the first day of the month
             Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: log.date))!
         }
-        
-        // Sort months descending (newest first)
         let sortedMonths = grouped.keys.sorted(by: >)
-        
         return sortedMonths.map { month in
             LogSection(month: month, logs: grouped[month]!)
         }
     }
     
-    // --- Calculate 30-Day Average (Excluding Today) ---
-        var averageCalories30Days: Int {
-            let calendar = Calendar.current
-            let today = calendar.startOfDay(for: Date())
-            let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: today)!
-            
-            // Filter logs:
-            // 1. Date is within the last 30 days
-            // 2. Date is strictly BEFORE today (excludes current incomplete day)
-            // 3. Calories > 0 (ignore empty logs)
-            let recentLogs = logs.filter {
-                $0.date >= thirtyDaysAgo &&
-                $0.date < today &&
-                $0.caloriesConsumed > 0
-            }
-            
-            guard !recentLogs.isEmpty else { return 0 }
-            
-            let total = recentLogs.reduce(0) { $0 + $1.caloriesConsumed }
-            return total / recentLogs.count
+    var averageCalories30Days: Int {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: today)!
+        
+        let recentLogs = logs.filter {
+            $0.date >= thirtyDaysAgo &&
+            $0.date < today &&
+            $0.caloriesConsumed > 0
         }
+        
+        guard !recentLogs.isEmpty else { return 0 }
+        let total = recentLogs.reduce(0) { $0 + $1.caloriesConsumed }
+        return total / recentLogs.count
+    }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Only show calorie summary if enabled
+                // Summary Header (Blends into background)
                 if isCalorieCountingEnabled {
                     summaryHeader
+                        .background(appBackgroundColor)
                 }
                 
+                // List (Background matches top)
                 List {
                     ForEach(groupedSections) { section in
                         Section(header: Text(section.month, format: .dateTime.month(.wide).year())) {
@@ -98,6 +99,8 @@ struct ContentView: View {
                                 )) {
                                     logRow(for: log)
                                 }
+                                // Card Color (#27272A in Dark Mode)
+                                .listRowBackground(cardBackgroundColor)
                             }
                             .onDelete { indexSet in
                                 deleteItems(at: indexSet, from: section.logs)
@@ -106,7 +109,10 @@ struct ContentView: View {
                     }
                 }
                 .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden) // Hides system default
+                .background(appBackgroundColor)   // Applies #1C1C1E
             }
+            .background(appBackgroundColor) // Covers Safe Areas
             .navigationTitle("Daily Logs")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -151,7 +157,6 @@ struct ContentView: View {
                 Text("This data is automatically synced with Apple Health. Manual entries are added ON TOP of HealthKit data.")
             }
             .onAppear(perform: setupOnAppear)
-            // Real-time sync for Today
             .onChange(of: healthManager.caloriesBurnedToday) { _, newValue in
                 updateTodayLog { $0.caloriesBurned = Int(newValue) }
             }
@@ -182,7 +187,6 @@ struct ContentView: View {
     
     private func refreshLast365Days() {
         isRefreshingHistory = true
-        
         let firstWeightDate = weightEntries.first?.date
         
         Task {
@@ -204,7 +208,6 @@ struct ContentView: View {
                     if let log = logs.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
                         log.caloriesConsumed = Int(data.consumed) + log.manualCalories
                         if enableCaloriesBurned { log.caloriesBurned = Int(data.burned) }
-                        
                         log.protein = Int(data.protein) + log.manualProtein
                         log.carbs = Int(data.carbs) + log.manualCarbs
                         log.fat = Int(data.fat) + log.manualFat
@@ -253,7 +256,6 @@ struct ContentView: View {
                                 .multilineTextAlignment(.trailing)
                         }
                     }
-                    
                     Section("Macros (Optional)") {
                         HStack {
                             Text("Protein (g)")
@@ -277,7 +279,6 @@ struct ContentView: View {
                                 .multilineTextAlignment(.trailing)
                         }
                     }
-                    
                     Section(footer: Text(inputMode == 0 ? "Values will be added to existing HealthKit data." : "Calculates the offset needed to reach this total.")) { }
                 } else {
                     Section {
@@ -313,16 +314,12 @@ struct ContentView: View {
                 // Add Mode
                 log.manualCalories += calVal
                 log.caloriesConsumed += calVal
-                
                 log.manualProtein += pVal
                 log.protein = (log.protein ?? 0) + pVal
-                
                 log.manualCarbs += cVal
                 log.carbs = (log.carbs ?? 0) + cVal
-                
                 log.manualFat += fVal
                 log.fat = (log.fat ?? 0) + fVal
-                
             } else {
                 // Set Mode
                 let currentHKCalories = log.caloriesConsumed - log.manualCalories
@@ -345,11 +342,8 @@ struct ContentView: View {
                     log.fat = fVal
                 }
             }
-            
             if log.goalType == nil { log.goalType = currentGoalType }
-            
         } else {
-            // New Log
             let newLog = DailyLog(
                 date: logDate,
                 caloriesConsumed: calVal,
@@ -362,25 +356,20 @@ struct ContentView: View {
             newLog.manualProtein = pVal
             newLog.manualCarbs = cVal
             newLog.manualFat = fVal
-            
             modelContext.insert(newLog)
         }
-        
         showingLogSheet = false
     }
     
     private func setupOnAppear() {
         healthManager.requestAuthorization()
         healthManager.fetchAllHealthData()
-        
         if healthManager.caloriesConsumedToday > 0 {
             updateTodayLog { $0.caloriesConsumed = Int(healthManager.caloriesConsumedToday) + $0.manualCalories }
         }
-        
         if enableCaloriesBurned {
             updateTodayLog { $0.caloriesBurned = Int(healthManager.caloriesBurnedToday) }
         }
-        
         if healthManager.proteinToday > 0 { updateTodayLog { $0.protein = Int(healthManager.proteinToday) + $0.manualProtein } }
         if healthManager.carbsToday > 0 { updateTodayLog { $0.carbs = Int(healthManager.carbsToday) + $0.manualCarbs } }
         if healthManager.fatToday > 0 { updateTodayLog { $0.fat = Int(healthManager.fatToday) + $0.manualFat } }
@@ -388,7 +377,6 @@ struct ContentView: View {
     
     private func updateTodayLog(update: (DailyLog) -> Void) {
         let todayDate = Calendar.current.startOfDay(for: Date())
-        
         if let todayLog = logs.first(where: { $0.date == todayDate }) {
             update(todayLog)
         } else {
@@ -412,8 +400,7 @@ struct ContentView: View {
             let burned = enableCaloriesBurned ? today.caloriesBurned : 0
             let remaining = dailyGoal + burned - today.caloriesConsumed
             
-            VStack(spacing: 8) { // Slightly increased spacing
-                // Existing Counter
+            VStack(spacing: 8) {
                 VStack(spacing: 5) {
                     Text("\(remaining)")
                         .font(.system(size: 40, weight: .bold))
@@ -422,7 +409,6 @@ struct ContentView: View {
                         .font(.caption).foregroundColor(.secondary)
                 }
                 
-                // --- NEW: 30 Day Avg Display ---
                 if averageCalories30Days > 0 {
                     Text("30-Day Avg: \(averageCalories30Days) kcal")
                         .font(.caption)
@@ -445,6 +431,7 @@ struct ContentView: View {
                 HStack {
                     Text(log.date, format: .dateTime.day().month(.abbreviated).year())
                         .font(.body)
+                        .foregroundColor(.primary)
                     
                     if log.isOverridden && isCalorieCountingEnabled {
                         Image(systemName: "o.circle.fill")
