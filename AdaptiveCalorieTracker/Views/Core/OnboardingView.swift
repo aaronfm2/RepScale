@@ -5,7 +5,6 @@ struct OnboardingView: View {
     @Binding var isCompleted: Bool
     @Environment(\.modelContext) private var modelContext
     
-    // ... [Keep existing state variables] ...
     @State private var currentStep = 0
     @AppStorage("unitSystem") private var unitSystem: String = UnitSystem.metric.rawValue
     
@@ -15,7 +14,6 @@ struct OnboardingView: View {
     // --- NEW: Prediction Method ---
     @AppStorage("estimationMethod") private var estimationMethod: Int = 0
     
-    // ... [Keep existing variables: gender, currentWeight, goalType etc] ...
     @AppStorage("userGender") private var gender: Gender = .male
     
     @State private var currentWeight: Double? = nil
@@ -29,7 +27,6 @@ struct OnboardingView: View {
     @State private var dailyGoalInput: String = ""
     @State private var trackCaloriesBurned: Bool = false
     
-    // ... [Keep AppStorage keys] ...
     @AppStorage("dailyCalorieGoal") private var storedDailyGoal: Int = 2000
     @AppStorage("targetWeight") private var storedTargetWeight: Double = 70.0
     @AppStorage("goalType") private var storedGoalType: String = GoalType.cutting.rawValue
@@ -45,7 +42,6 @@ struct OnboardingView: View {
     }
 
     var body: some View {
-        // ... [Keep existing body structure] ...
         ZStack {
             Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
             
@@ -65,12 +61,16 @@ struct OnboardingView: View {
                 
                 HStack {
                     if currentStep > 0 {
-                        Button("Back") { currentStep -= 1 }
-                            .foregroundColor(.secondary)
+                        Button("Back") {
+                            hideKeyboard() // Dismiss keyboard when going back
+                            currentStep -= 1
+                        }
+                        .foregroundColor(.secondary)
                     }
                     Spacer()
                     if currentStep < 4 {
                         Button("Next") {
+                            hideKeyboard() // This ensures the number pad closes
                             withAnimation {
                                 if currentStep == 1 { estimateMaintenance() }
                                 currentStep += 1
@@ -80,6 +80,7 @@ struct OnboardingView: View {
                         .disabled(cannotMoveForward)
                     } else {
                         Button("Get Started") {
+                            hideKeyboard()
                             completeOnboarding()
                         }
                         .buttonStyle(.borderedProminent)
@@ -96,7 +97,6 @@ struct OnboardingView: View {
         return false
     }
     
-    // ... [Keep welcomeStep, biometricsStep, goalsStep] ...
     var welcomeStep: some View {
         VStack(spacing: 20) {
             Image(systemName: "figure.strengthtraining.traditional")
@@ -138,7 +138,6 @@ struct OnboardingView: View {
             }
             Section(footer: Text("We use this to estimate your baseline metabolic rate.")) { }
         }
-        .navigationTitle("About You")
     }
     
     var goalsStep: some View {
@@ -162,15 +161,12 @@ struct OnboardingView: View {
             }
             Section(footer: Text("We automatically calculate if you are cutting, bulking, or maintaining based on your target weight.")) {}
         }
-        .navigationTitle("Goals")
         .onAppear { determineGoalType() }
     }
 
-    // --- UPDATED: Strategy Step with Prediction Logic ---
     var strategyStep: some View {
         Form {
             Section(header: Text("Preferences")) {
-                // Toggle to disable/enable calorie counting
                 Toggle("Enable Calorie Counting", isOn: $isCalorieCountingEnabled)
                 
                 if isCalorieCountingEnabled {
@@ -178,7 +174,6 @@ struct OnboardingView: View {
                 }
             }
             
-            // --- NEW: Prediction Logic in Onboarding ---
             Section("Goal Prediction Logic") {
                 if isCalorieCountingEnabled {
                     Picker("Method", selection: $estimationMethod) {
@@ -262,10 +257,8 @@ struct OnboardingView: View {
                 }
             }
         }
-        .navigationTitle("Plan")
     }
     
-    // --- UPDATED: Final Step ---
     var finalStep: some View {
         VStack(spacing: 20) {
             Image(systemName: "checkmark.circle.fill")
@@ -292,7 +285,6 @@ struct OnboardingView: View {
         }
     }
     
-    // ... [Keep logic functions: determineGoalType, goalTypeColor, estimateMaintenance, calculateGoalFromDate, completeOnboarding] ...
     func determineGoalType() {
         guard let tWeight = targetWeight, let cWeight = currentWeight else {
             goalType = .maintenance
@@ -353,7 +345,6 @@ struct OnboardingView: View {
         storedTargetWeight = storedTargetWeightKg
         storedEnableCaloriesBurned = trackCaloriesBurned
         
-        // If enabled, save inputs, otherwise use defaults
         if isCalorieCountingEnabled {
             storedMaintenance = Int(maintenanceInput) ?? 2500
             storedDailyGoal = Int(dailyGoalInput) ?? 2000
@@ -362,5 +353,12 @@ struct OnboardingView: View {
         let firstEntry = WeightEntry(date: Date(), weight: storedCurrentWeightKg)
         modelContext.insert(firstEntry)
         isCompleted = true
+    }
+}
+
+// Extension to allow easy keyboard dismissal from any view
+extension View {
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
