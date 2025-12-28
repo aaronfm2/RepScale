@@ -1,10 +1,3 @@
-//
-//  AdaptiveCalorieTrackerUITestsLaunchTests.swift
-//  AdaptiveCalorieTrackerUITests
-//
-//  Created by Aaron Franklin-Martinez on 18/12/2025.
-//
-
 import XCTest
 
 final class AdaptiveCalorieTrackerUITestsLaunchTests: XCTestCase {

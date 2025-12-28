@@ -1,10 +1,3 @@
-//
-//  AdaptiveCalorieTrackerTests.swift
-//  AdaptiveCalorieTrackerTests
-//
-//  Created by Aaron Franklin-Martinez on 18/12/2025.
-//
-
 import Testing
 @testable import AdaptiveCalorieTracker
 
