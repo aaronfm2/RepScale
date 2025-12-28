@@ -8,6 +8,9 @@ struct OnboardingView: View {
     @State private var currentStep = 0
     @AppStorage("unitSystem") private var unitSystem: String = UnitSystem.metric.rawValue
     
+    // --- NEW: Dark Mode Support ---
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = true
+    
     // --- NEW: Calorie Counting Toggle ---
     @AppStorage("isCalorieCountingEnabled") private var isCalorieCountingEnabled: Bool = true
     
@@ -37,13 +40,19 @@ struct OnboardingView: View {
         return unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg"
     }
     
+    // --- NEW: Custom Background Color ---
+    var appBackgroundColor: Color {
+        isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
+    }
+    
     func toKg(_ value: Double) -> Double {
         return unitSystem == UnitSystem.imperial.rawValue ? value / 2.20462 : value
     }
 
     var body: some View {
         ZStack {
-            Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
+            // --- UPDATED: Use custom background ---
+            appBackgroundColor.ignoresSafeArea()
             
             VStack {
                 ProgressView(value: Double(currentStep), total: 4)
@@ -138,6 +147,9 @@ struct OnboardingView: View {
             }
             Section(footer: Text("We use this to estimate your baseline metabolic rate.")) { }
         }
+        // --- UPDATED: Blend Form with background ---
+        .scrollContentBackground(.hidden)
+        .background(appBackgroundColor)
     }
     
     var goalsStep: some View {
@@ -162,6 +174,9 @@ struct OnboardingView: View {
             Section(footer: Text("We automatically calculate if you are cutting, bulking, or maintaining based on your target weight.")) {}
         }
         .onAppear { determineGoalType() }
+        // --- UPDATED: Blend Form with background ---
+        .scrollContentBackground(.hidden)
+        .background(appBackgroundColor)
     }
 
     var strategyStep: some View {
@@ -240,6 +255,9 @@ struct OnboardingView: View {
                 }
             }
         }
+        // --- UPDATED: Blend Form with background ---
+        .scrollContentBackground(.hidden)
+        .background(appBackgroundColor)
     }
     
     var finalStep: some View {
@@ -262,7 +280,8 @@ struct OnboardingView: View {
                     Text("Maintenance: \(maintenanceInput) kcal").foregroundColor(.secondary)
                 }
                 .padding()
-                .background(Color.gray.opacity(0.1))
+                // Use a slightly lighter gray for the card in dark mode
+                .background(isDarkMode ? Color.white.opacity(0.1) : Color.gray.opacity(0.1))
                 .cornerRadius(10)
             }
         }
