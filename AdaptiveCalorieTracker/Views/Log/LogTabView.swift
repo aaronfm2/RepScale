@@ -17,7 +17,7 @@ struct ContentView: View {
     @AppStorage("goalType") private var currentGoalType: String = GoalType.cutting.rawValue
     @AppStorage("enableCaloriesBurned") private var enableCaloriesBurned: Bool = true
     @AppStorage("isCalorieCountingEnabled") private var isCalorieCountingEnabled: Bool = true
-    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = true
 
     // MARK: - Color Palette (Two Colors)
     

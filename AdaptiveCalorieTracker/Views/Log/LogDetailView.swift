@@ -13,7 +13,7 @@ struct LogDetailView: View {
     @State private var showingEditOverrides = false
     
     // MARK: - Dark Mode & Colors
-    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = true
 
     var appBackgroundColor: Color {
         isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)

@@ -25,7 +25,7 @@ struct DashboardView: View {
     @AppStorage("isCalorieCountingEnabled") private var isCalorieCountingEnabled: Bool = true
     
     // --- Dark Mode State ---
-    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = true
     
     @State private var showingSettings = false
     @State private var showingReconfigureGoal = false

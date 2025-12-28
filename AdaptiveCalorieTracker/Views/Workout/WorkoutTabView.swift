@@ -12,8 +12,8 @@ struct WorkoutTabView: View {
     
     @AppStorage("trackedMuscles") private var trackedMusclesString: String = "Chest,Back,Legs,Shoulders,Abs,Cardio,Biceps,Triceps"
     
-    // MARK: - Dark Mode & Colors
-    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
+    // MARK: - Dark Mode & Colours
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = true
 
     var appBackgroundColor: Color {
         isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
@@ -176,7 +176,7 @@ struct RecoveryCard: View {
     let muscle: String
     let days: Int?
     
-    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = true
     var cardBackgroundColor: Color {
         isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
     }
@@ -235,7 +235,7 @@ struct WorkoutCalendarView: View {
     @State private var selectedWorkouts: [Workout] = []
     @State private var isNavigating = false
     
-    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = true
     var cardBackgroundColor: Color {
         isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
     }

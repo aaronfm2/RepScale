@@ -6,7 +6,7 @@ struct WorkoutDetailView: View {
     @State private var isEditing = false
     
     @AppStorage("unitSystem") private var unitSystem: String = UnitSystem.metric.rawValue
-    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = true
 
     var appBackgroundColor: Color {
         isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
