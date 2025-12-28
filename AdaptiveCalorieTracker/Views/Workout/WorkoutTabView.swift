@@ -46,18 +46,33 @@ struct WorkoutTabView: View {
                             .font(.caption).foregroundColor(.secondary)
                             .listRowBackground(cardBackgroundColor)
                     } else {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150))], spacing: 15) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 15)], spacing: 15) {
                             ForEach(trackedMuscles, id: \.self) { muscle in
                                 RecoveryCard(muscle: muscle, days: daysSinceLastTrained(muscle))
                             }
                         }
                         .padding(.vertical, 5)
                         .listRowBackground(Color.clear)
+                        
+                        // --- UPDATED BUTTON ---
+                        Button(action: { showingSettings = true }) {
+                            HStack {
+                                Image(systemName: "slider.horizontal.3")
+                                Text("Select Tracked Muscles")
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.caption)
+                            }
+                            .fontWeight(.medium)
+                            .foregroundColor(.primary)
+                            .padding()
+                            .background(cardBackgroundColor)
+                            .cornerRadius(12)
+                        }
+                        .padding(.top, 8)
+                        .buttonStyle(.plain)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets())
                     }
-                    
-                    Button("Select Muscles") { showingSettings = true }
-                        .font(.caption)
-                        .listRowBackground(cardBackgroundColor)
                 }
                 
                 // 3. Recent Workouts
@@ -167,23 +182,46 @@ struct RecoveryCard: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(muscle).font(.headline)
+        VStack(alignment: .leading, spacing: 0) {
+            // Muscle Name at the top
+            Text(muscle)
+                .font(.headline)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            
+            Spacer() // Pushes the status text to the bottom
+            
+            // Status at the bottom
             if let d = days {
-                HStack(alignment: .lastTextBaseline, spacing: 2) {
-                    Text("\(d)").font(.title).bold()
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text("\(d)")
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
                         .foregroundColor(d > 4 ? .red : .green)
-                    Text("days ago").font(.caption).foregroundColor(.secondary)
+                    Text("days")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
                 }
+                Text("ago")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .offset(y: -4) // Slight visual adjustment to tuck it under the number
             } else {
-                Text("Not trained yet").font(.caption).foregroundColor(.secondary)
+                Text("Not trained")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+                Text("yet")
+                    .font(.caption)
+                    .foregroundColor(.gray)
             }
         }
-        .padding()
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(cardBackgroundColor) // Updated background
-        .cornerRadius(10)
-        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+        .frame(height: 100) // --- FIX: Enforces uniform height for all cards ---
+        .background(cardBackgroundColor)
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.05), radius: 3, x: 0, y: 2)
     }
 }
 

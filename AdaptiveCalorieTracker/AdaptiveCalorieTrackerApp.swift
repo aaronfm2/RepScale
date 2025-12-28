@@ -8,7 +8,7 @@ struct AdaptiveCalorieTrackerApp: App {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
     
     // --- NEW: Dark Mode State ---
-    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = true
     
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
