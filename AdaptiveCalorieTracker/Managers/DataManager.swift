@@ -96,4 +96,37 @@ class DataManager {
             print("DataManager: Failed to update log after deletion: \(error)")
         }
     }
+    // MARK: - Goal Period Management
+        
+        func startNewGoalPeriod(goalType: String, startWeight: Double, targetWeight: Double, dailyCalorieGoal: Int, maintenanceCalories: Int) {
+            let now = Date()
+            
+            // 1. Find and close the currently active period
+            // We look for periods where endDate is nil
+            let descriptor = FetchDescriptor<GoalPeriod>(
+                predicate: #Predicate { $0.endDate == nil }
+            )
+            
+            do {
+                let activePeriods = try modelContext.fetch(descriptor)
+                for period in activePeriods {
+                    period.endDate = now
+                }
+            } catch {
+                print("DataManager: Failed to fetch active goal periods: \(error)")
+            }
+            
+            // 2. Create the new active period
+            let newPeriod = GoalPeriod(
+                startDate: now,
+                goalType: goalType,
+                startWeight: startWeight,
+                targetWeight: targetWeight,
+                dailyCalorieGoal: dailyCalorieGoal,
+                maintenanceCalories: maintenanceCalories
+            )
+            
+            modelContext.insert(newPeriod)
+            print("DataManager: Started new goal period: \(goalType)")
+        }
 }

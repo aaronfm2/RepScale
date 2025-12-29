@@ -478,6 +478,7 @@ struct DashboardView: View {
 
 struct GoalConfigurationView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.modelContext) private var modelContext
     @FocusState private var isInputFocused: Bool
     
     let appEstimatedMaintenance: Int?
@@ -499,6 +500,10 @@ struct GoalConfigurationView: View {
     @State private var dailyGoal: Int = 0
     @State private var calculatedDeficit: Int = 0
     @State private var derivedGoalType: GoalType = .maintenance
+    
+    private var dataManager: DataManager {
+            DataManager(modelContext: modelContext)
+        }
     
     var unitLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
     
@@ -662,11 +667,22 @@ struct GoalConfigurationView: View {
     private func save() {
         guard let tWeightUser = targetWeight else { return }
         
-        UserDefaults.standard.set(tWeightUser.toStoredWeight(system: unitSystem), forKey: "targetWeight")
-        UserDefaults.standard.set(dailyGoal, forKey: "dailyCalorieGoal")
-        UserDefaults.standard.set(derivedGoalType.rawValue, forKey: "goalType")
-        UserDefaults.standard.set(maintenanceDisplay, forKey: "maintenanceCalories")
-        
-        dismiss()
-    }
-}
+        let tWeightStored = tWeightUser.toStoredWeight(system: unitSystem)
+                UserDefaults.standard.set(tWeightStored, forKey: "targetWeight")
+                UserDefaults.standard.set(dailyGoal, forKey: "dailyCalorieGoal")
+                UserDefaults.standard.set(derivedGoalType.rawValue, forKey: "goalType")
+                UserDefaults.standard.set(maintenanceDisplay, forKey: "maintenanceCalories")
+                
+                let startW = latestWeightKg ?? 0.0
+                
+                dataManager.startNewGoalPeriod(
+                    goalType: derivedGoalType.rawValue,
+                    startWeight: startW,
+                    targetWeight: tWeightStored,
+                    dailyCalorieGoal: dailyGoal,
+                    maintenanceCalories: maintenanceDisplay
+                )
+                
+                dismiss()
+            }
+        }

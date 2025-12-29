@@ -35,6 +35,10 @@ struct OnboardingView: View {
     @AppStorage("goalType") private var storedGoalType: String = GoalType.cutting.rawValue
     @AppStorage("maintenanceCalories") private var storedMaintenance: Int = 2500
     @AppStorage("enableCaloriesBurned") private var storedEnableCaloriesBurned: Bool = true
+    
+    private var dataManager: DataManager {
+            DataManager(modelContext: modelContext)
+        }
 
     var unitLabel: String {
         return unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg"
@@ -356,10 +360,20 @@ struct OnboardingView: View {
         }
         
         let firstEntry = WeightEntry(date: Date(), weight: storedCurrentWeightKg)
-        modelContext.insert(firstEntry)
-        isCompleted = true
-    }
-}
+                modelContext.insert(firstEntry)
+                
+                // Start First Goal Period
+                dataManager.startNewGoalPeriod(
+                    goalType: storedGoalType,
+                    startWeight: storedCurrentWeightKg,
+                    targetWeight: storedTargetWeightKg,
+                    dailyCalorieGoal: storedDailyGoal,
+                    maintenanceCalories: storedMaintenance
+                )
+                
+                isCompleted = true
+            }
+        }
 
 extension View {
     func hideKeyboard() {
