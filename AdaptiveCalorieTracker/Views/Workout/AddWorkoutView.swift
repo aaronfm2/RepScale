@@ -72,6 +72,12 @@ struct AddWorkoutView: View {
                         .bold()
                     }
                 }
+                ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") {
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        }
+                    }
             }
             // Sheets & Alerts
             .sheet(isPresented: $viewModel.showAddExerciseSheet) {
