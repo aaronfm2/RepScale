@@ -66,46 +66,57 @@ struct WeightTrackerView: View {
                 .spotlightTarget(.addWeight)
             }
             .sheet(isPresented: $showingAddWeight) {
-                NavigationStack {
-                    VStack(spacing: 20) {
-                        DatePicker("Date & Time", selection: $selectedDate, displayedComponents: [.date, .hourAndMinute])
-                            .datePickerStyle(.graphical)
-                            .padding()
-                        
-                        HStack {
-                            Text("Weight (\(weightLabel))")
-                            Spacer()
-                            TextField("0.0", text: $newWeight)
-                                .textFieldStyle(.roundedBorder)
-                                .keyboardType(.decimalPad)
-                                .frame(width: 100)
-                                .focused($isInputFocused)
+                            NavigationStack {
+                                Form {
+                                    // Section 1: Date
+                                    Section {
+                                        DatePicker("Date", selection: $selectedDate, displayedComponents: [.date, .hourAndMinute])
+                                    }
+                                    
+                                    // Section 2: Weight Input
+                                    Section {
+                                        HStack {
+                                            Text("Weight")
+                                                .font(.headline)
+                                            
+                                            Spacer()
+                                            
+                                            TextField("0.0", text: $newWeight)
+                                                .keyboardType(.decimalPad)
+                                                .multilineTextAlignment(.trailing)
+                                                .font(.title3)
+                                                .focused($isInputFocused)
+                                                .frame(minWidth: 50)
+                                            
+                                            Text(weightLabel)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    
+                                    // Section 3: Save Button
+                                    Section {
+                                        Button("Save Entry") {
+                                            saveWeight()
+                                        }
+                                        .bold()
+                                        .frame(maxWidth: .infinity)
+                                        .disabled(newWeight.isEmpty)
+                                    }
+                                }
+                                .navigationTitle("Log Weight")
+                                .navigationBarTitleDisplayMode(.inline)
+                                .toolbar {
+                                    ToolbarItemGroup(placement: .keyboard) {
+                                        Spacer()
+                                        Button("Done") { isInputFocused = false }
+                                    }
+                                    ToolbarItem(placement: .cancellationAction) {
+                                        Button("Cancel") { showingAddWeight = false }
+                                    }
+                                }
+                            }
+                            .presentationDetents([.medium, .large])
                         }
-                        .padding(.horizontal)
-                        
-                        Button("Save Entry") {
-                            saveWeight()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(newWeight.isEmpty)
-                        
-                        Spacer()
-                    }
-                    .padding()
-                    .navigationTitle("Log Weight")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItemGroup(placement: .keyboard) {
-                            Spacer()
-                            Button("Done") { isInputFocused = false }
-                        }
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Cancel") { showingAddWeight = false }
-                        }
-                    }
-                }
-                .presentationDetents([.large])
-            }
         }
     }
 
