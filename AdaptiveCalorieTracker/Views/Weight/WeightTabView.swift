@@ -8,6 +8,9 @@ struct WeightTrackerView: View {
     // Fetch the active goal period to get the true "Start Weight" for the current goal
     @Query(filter: #Predicate<GoalPeriod> { $0.endDate == nil }) private var activeGoalPeriods: [GoalPeriod]
     
+    // Fetch ALL goal periods to display history labels
+    @Query(sort: \GoalPeriod.startDate, order: .reverse) private var allGoalPeriods: [GoalPeriod]
+    
     @AppStorage("goalType") private var currentGoalType: String = GoalType.cutting.rawValue
     @AppStorage("unitSystem") private var unitSystem: String = UnitSystem.metric.rawValue
     @AppStorage("targetWeight") private var targetWeight: Double = 70.0 // Stored in KG
@@ -37,7 +40,7 @@ struct WeightTrackerView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // MARK: - New Header Section
+                // MARK: - Header Section
                 if let current = weights.first {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
@@ -62,21 +65,42 @@ struct WeightTrackerView: View {
                     .background(appBackgroundColor)
                 }
                 
-                // MARK: - Existing List
+                // MARK: - Weight List with Goal Labels
                 List {
                     ForEach(weights) { entry in
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(entry.date, format: .dateTime.day().month().year())
-                                    .font(.body)
-                                Text(entry.date, format: .dateTime.hour().minute())
-                                    .font(.caption).foregroundColor(.secondary)
+                        VStack(alignment: .leading, spacing: 6) {
+                            // 1. Date and Weight Row
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(entry.date, format: .dateTime.day().month().year())
+                                        .font(.body)
+                                    Text(entry.date, format: .dateTime.hour().minute())
+                                        .font(.caption).foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Text("\(entry.weight.toUserWeight(system: unitSystem), specifier: "%.1f") \(weightLabel)")
+                                    .fontWeight(.semibold)
+                                    .font(.title3)
                             }
-                            Spacer()
-                            Text("\(entry.weight.toUserWeight(system: unitSystem), specifier: "%.1f") \(weightLabel)")
-                                .fontWeight(.semibold)
-                                .font(.title3)
+                            
+                            // 2. Goal Change Labels (Logic Updated)
+                            let events = getGoalEvents(for: entry.date)
+                            if !events.isEmpty {
+                                HStack(spacing: 6) {
+                                    ForEach(events, id: \.self) { event in
+                                        Text(event)
+                                            .font(.caption2)
+                                            .fontWeight(.bold)
+                                            .padding(.vertical, 3)
+                                            .padding(.horizontal, 8)
+                                            .background(event.contains("Started") ? Color.green.opacity(0.15) : Color.red.opacity(0.15))
+                                            .foregroundColor(event.contains("Started") ? .green : .red)
+                                            .cornerRadius(6)
+                                    }
+                                }
+                            }
                         }
+                        .padding(.vertical, 2)
                         .listRowBackground(cardBackgroundColor)
                     }
                     .onDelete(perform: deleteWeight)
@@ -140,6 +164,32 @@ struct WeightTrackerView: View {
     }
 
     // MARK: - Logic
+    
+    /// Returns a list of strings describing goal changes for a specific day.
+    /// Filters out transient changes to prevent duplicate labels on the same day.
+    private func getGoalEvents(for date: Date) -> [String] {
+        var events: [String] = []
+        
+        // 1. Identify the 'Outgoing' Goal
+        // We look for a period that ended on this day BUT started on a different day.
+        // This effectively ignores any goals that were created and deleted on the same day (reconfigurations).
+        if let significantEnd = allGoalPeriods.first(where: { p in
+            guard let end = p.endDate else { return false }
+            return Calendar.current.isDate(end, inSameDayAs: date) &&
+                   !Calendar.current.isDate(p.startDate, inSameDayAs: date)
+        }) {
+            events.append("\(significantEnd.goalType) Ended")
+        }
+        
+        // 2. Identify the 'Incoming' Goal
+        // We look for the LATEST period that started on this day.
+        // Since `allGoalPeriods` is sorted by `startDate` DESC, the first match is the most recent one.
+        if let latestStart = allGoalPeriods.first(where: { Calendar.current.isDate($0.startDate, inSameDayAs: date) }) {
+             events.append("\(latestStart.goalType) Started")
+        }
+        
+        return events
+    }
 
     private func saveWeight() {
         guard let userValue = Double(newWeight) else { return }
