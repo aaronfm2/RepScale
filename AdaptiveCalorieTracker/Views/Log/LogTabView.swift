@@ -301,79 +301,106 @@ struct ContentView: View {
     }
 
     private func saveLog() {
-        let logDate = Calendar.current.startOfDay(for: selectedLogDate)
-        let calVal = Int(caloriesInput) ?? 0
-        let pVal = Int(proteinInput) ?? 0
-        let cVal = Int(carbsInput) ?? 0
-        let fVal = Int(fatInput) ?? 0
-        
-        let existingLog = logs.first(where: { $0.date == logDate })
-        
-        if let log = existingLog {
-            if inputMode == 0 {
-                // Add Mode
-                log.manualCalories += calVal
-                log.caloriesConsumed += calVal
-                log.manualProtein += pVal
-                log.protein = (log.protein ?? 0) + pVal
-                log.manualCarbs += cVal
-                log.carbs = (log.carbs ?? 0) + cVal
-                log.manualFat += fVal
-                log.fat = (log.fat ?? 0) + fVal
-            } else {
-                // Set Mode
-                let currentHKCalories = log.caloriesConsumed - log.manualCalories
-                log.manualCalories = calVal - currentHKCalories
-                log.caloriesConsumed = calVal
-                
-                if !proteinInput.isEmpty {
-                    let currentHKP = (log.protein ?? 0) - log.manualProtein
-                    log.manualProtein = pVal - currentHKP
-                    log.protein = pVal
-                }
-                if !carbsInput.isEmpty {
-                    let currentHKC = (log.carbs ?? 0) - log.manualCarbs
-                    log.manualCarbs = cVal - currentHKC
-                    log.carbs = cVal
-                }
-                if !fatInput.isEmpty {
-                    let currentHKF = (log.fat ?? 0) - log.manualFat
-                    log.manualFat = fVal - currentHKF
-                    log.fat = fVal
-                }
+            let logDate = Calendar.current.startOfDay(for: selectedLogDate)
+            let calVal = Int(caloriesInput) ?? 0
+            let pVal = Int(proteinInput) ?? 0
+            let cVal = Int(carbsInput) ?? 0
+            let fVal = Int(fatInput) ?? 0
+            
+            // --- NEW: Robust Weight Lookup ---
+            // Find ALL weights for this day and grab the LATEST one
+            let dayWeights = weightEntries.filter {
+                Calendar.current.isDate($0.date, inSameDayAs: logDate)
             }
-            if log.goalType == nil { log.goalType = currentGoalType }
-        } else {
-            let newLog = DailyLog(
-                date: logDate,
-                caloriesConsumed: calVal,
-                goalType: currentGoalType,
-                protein: pVal,
-                carbs: cVal,
-                fat: fVal
-            )
-            newLog.manualCalories = calVal
-            newLog.manualProtein = pVal
-            newLog.manualCarbs = cVal
-            newLog.manualFat = fVal
-            modelContext.insert(newLog)
+            let latestWeight = dayWeights.sorted(by: { $0.date < $1.date }).last?.weight
+            // ---------------------------------
+            
+            let existingLog = logs.first(where: { $0.date == logDate })
+            
+            if let log = existingLog {
+                // --- Force update the weight if found ---
+                if let w = latestWeight {
+                    log.weight = w
+                }
+                
+                if inputMode == 0 {
+                    // Add Mode
+                    log.manualCalories += calVal
+                    log.caloriesConsumed += calVal
+                    log.manualProtein += pVal
+                    log.protein = (log.protein ?? 0) + pVal
+                    log.manualCarbs += cVal
+                    log.carbs = (log.carbs ?? 0) + cVal
+                    log.manualFat += fVal
+                    log.fat = (log.fat ?? 0) + fVal
+                } else {
+                    // Set Mode
+                    let currentHKCalories = log.caloriesConsumed - log.manualCalories
+                    log.manualCalories = calVal - currentHKCalories
+                    log.caloriesConsumed = calVal
+                    
+                    if !proteinInput.isEmpty {
+                        let currentHKP = (log.protein ?? 0) - log.manualProtein
+                        log.manualProtein = pVal - currentHKP
+                        log.protein = pVal
+                    }
+                    if !carbsInput.isEmpty {
+                        let currentHKC = (log.carbs ?? 0) - log.manualCarbs
+                        log.manualCarbs = cVal - currentHKC
+                        log.carbs = cVal
+                    }
+                    if !fatInput.isEmpty {
+                        let currentHKF = (log.fat ?? 0) - log.manualFat
+                        log.manualFat = fVal - currentHKF
+                        log.fat = fVal
+                    }
+                }
+                if log.goalType == nil { log.goalType = currentGoalType }
+            } else {
+                let newLog = DailyLog(
+                    date: logDate,
+                    weight: latestWeight,
+                    caloriesConsumed: calVal,
+                    goalType: currentGoalType,
+                    protein: pVal,
+                    carbs: cVal,
+                    fat: fVal
+                )
+                newLog.manualCalories = calVal
+                newLog.manualProtein = pVal
+                newLog.manualCarbs = cVal
+                newLog.manualFat = fVal
+                modelContext.insert(newLog)
+            }
+            showingLogSheet = false
         }
-        showingLogSheet = false
-    }
     
     private func setupOnAppear() {
-        healthManager.requestAuthorization()
-        healthManager.fetchAllHealthData()
-        if healthManager.caloriesConsumedToday > 0 {
-            updateTodayLog { $0.caloriesConsumed = Int(healthManager.caloriesConsumedToday) + $0.manualCalories }
+            healthManager.requestAuthorization()
+            healthManager.fetchAllHealthData()
+            
+            for log in logs {
+                let dayWeights = weightEntries.filter {
+                    Calendar.current.isDate($0.date, inSameDayAs: log.date)
+                }
+                
+                if let latestEntry = dayWeights.sorted(by: { $0.date < $1.date }).last {
+                    if log.weight != latestEntry.weight {
+                        log.weight = latestEntry.weight
+                    }
+                }
+            }
+
+            if healthManager.caloriesConsumedToday > 0 {
+                updateTodayLog { $0.caloriesConsumed = Int(healthManager.caloriesConsumedToday) + $0.manualCalories }
+            }
+            if enableCaloriesBurned {
+                updateTodayLog { $0.caloriesBurned = Int(healthManager.caloriesBurnedToday) }
+            }
+            if healthManager.proteinToday > 0 { updateTodayLog { $0.protein = Int(healthManager.proteinToday) + $0.manualProtein } }
+            if healthManager.carbsToday > 0 { updateTodayLog { $0.carbs = Int(healthManager.carbsToday) + $0.manualCarbs } }
+            if healthManager.fatToday > 0 { updateTodayLog { $0.fat = Int(healthManager.fatToday) + $0.manualFat } }
         }
-        if enableCaloriesBurned {
-            updateTodayLog { $0.caloriesBurned = Int(healthManager.caloriesBurnedToday) }
-        }
-        if healthManager.proteinToday > 0 { updateTodayLog { $0.protein = Int(healthManager.proteinToday) + $0.manualProtein } }
-        if healthManager.carbsToday > 0 { updateTodayLog { $0.carbs = Int(healthManager.carbsToday) + $0.manualCarbs } }
-        if healthManager.fatToday > 0 { updateTodayLog { $0.fat = Int(healthManager.fatToday) + $0.manualFat } }
-    }
     
     private func updateTodayLog(update: (DailyLog) -> Void) {
         let todayDate = Calendar.current.startOfDay(for: Date())
