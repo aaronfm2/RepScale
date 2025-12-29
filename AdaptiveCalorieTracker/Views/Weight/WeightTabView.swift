@@ -6,8 +6,8 @@ struct WeightTrackerView: View {
     @Query(sort: \WeightEntry.date, order: .reverse) private var weights: [WeightEntry]
     
     @AppStorage("goalType") private var currentGoalType: String = GoalType.cutting.rawValue
-    // --- NEW ---
     @AppStorage("unitSystem") private var unitSystem: String = UnitSystem.metric.rawValue
+    @AppStorage("targetWeight") private var targetWeight: Double = 70.0 // Stored in KG
     
     // MARK: - Dark Mode & Colors
     @AppStorage("isDarkMode") private var isDarkMode: Bool = true
@@ -33,27 +33,54 @@ struct WeightTrackerView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(weights) { entry in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(entry.date, format: .dateTime.day().month().year())
-                                .font(.body)
-                            Text(entry.date, format: .dateTime.hour().minute())
-                                .font(.caption).foregroundColor(.secondary)
+            VStack(spacing: 0) {
+                // MARK: - New Header Section
+                if let current = weights.first {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            
+                            // 1. Journey Progress Card
+                            JourneyProgressCard(
+                                currentKg: current.weight,
+                                startKg: weights.last?.weight ?? current.weight,
+                                targetKg: targetWeight,
+                                goalType: currentGoalType,
+                                unitSystem: unitSystem,
+                                cardColor: cardBackgroundColor
+                            )
+                            
+                            // 2. Streak Card
+                            StreakCard(weights: weights, cardColor: cardBackgroundColor)
                         }
-                        Spacer()
-                        // --- UPDATED: Display converted weight ---
-                        Text("\(entry.weight.toUserWeight(system: unitSystem), specifier: "%.1f") \(weightLabel)")
-                            .fontWeight(.semibold)
-                            .font(.title3)
+                        .padding([.horizontal, .top])
+                        .padding(.bottom, 10)
                     }
-                    .listRowBackground(cardBackgroundColor) // Apply Card Color
+                    .background(appBackgroundColor)
                 }
-                .onDelete(perform: deleteWeight)
+                
+                // MARK: - Existing List
+                List {
+                    ForEach(weights) { entry in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(entry.date, format: .dateTime.day().month().year())
+                                    .font(.body)
+                                Text(entry.date, format: .dateTime.hour().minute())
+                                    .font(.caption).foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Text("\(entry.weight.toUserWeight(system: unitSystem), specifier: "%.1f") \(weightLabel)")
+                                .fontWeight(.semibold)
+                                .font(.title3)
+                        }
+                        .listRowBackground(cardBackgroundColor)
+                    }
+                    .onDelete(perform: deleteWeight)
+                }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+                .background(appBackgroundColor)
             }
-            .scrollContentBackground(.hidden) // Hide system default
-            .background(appBackgroundColor)   // Apply Main Background
             .navigationTitle("Weight History")
             .toolbar {
                 Button(action: {
@@ -65,67 +92,54 @@ struct WeightTrackerView: View {
                 }
                 .spotlightTarget(.addWeight)
             }
+            // MARK: - Add Weight Sheet
             .sheet(isPresented: $showingAddWeight) {
-                            NavigationStack {
-                                Form {
-                                    // Section 1: Date
-                                    Section {
-                                        DatePicker("Date", selection: $selectedDate, displayedComponents: [.date, .hourAndMinute])
-                                    }
-                                    
-                                    // Section 2: Weight Input
-                                    Section {
-                                        HStack {
-                                            Text("Weight")
-                                                .font(.headline)
-                                            
-                                            Spacer()
-                                            
-                                            TextField("0.0", text: $newWeight)
-                                                .keyboardType(.decimalPad)
-                                                .multilineTextAlignment(.trailing)
-                                                .font(.title3)
-                                                .focused($isInputFocused)
-                                                .frame(minWidth: 50)
-                                            
-                                            Text(weightLabel)
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                    
-                                    // Section 3: Save Button
-                                    Section {
-                                        Button("Save Entry") {
-                                            saveWeight()
-                                        }
-                                        .bold()
-                                        .frame(maxWidth: .infinity)
-                                        .disabled(newWeight.isEmpty)
-                                    }
-                                }
-                                .navigationTitle("Log Weight")
-                                .navigationBarTitleDisplayMode(.inline)
-                                .toolbar {
-                                    ToolbarItemGroup(placement: .keyboard) {
-                                        Spacer()
-                                        Button("Done") { isInputFocused = false }
-                                    }
-                                    ToolbarItem(placement: .cancellationAction) {
-                                        Button("Cancel") { showingAddWeight = false }
-                                    }
-                                }
-                            }
-                            .presentationDetents([.medium, .large])
+                NavigationStack {
+                    Form {
+                        Section {
+                            DatePicker("Date", selection: $selectedDate, displayedComponents: [.date, .hourAndMinute])
                         }
+                        Section {
+                            HStack {
+                                Text("Weight")
+                                Spacer()
+                                TextField("0.0", text: $newWeight)
+                                    .keyboardType(.decimalPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .font(.title3)
+                                    .focused($isInputFocused)
+                                    .frame(minWidth: 50)
+                                Text(weightLabel).foregroundColor(.secondary)
+                            }
+                        }
+                        Section {
+                            Button("Save Entry") { saveWeight() }
+                                .bold()
+                                .frame(maxWidth: .infinity)
+                                .disabled(newWeight.isEmpty)
+                        }
+                    }
+                    .navigationTitle("Log Weight")
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button("Done") { isInputFocused = false }
+                        }
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { showingAddWeight = false }
+                        }
+                    }
+                }
+                .presentationDetents([.medium])
+            }
         }
     }
 
+    // MARK: - Logic
+
     private func saveWeight() {
         guard let userValue = Double(newWeight) else { return }
-        
-        // --- UPDATED: Convert User Input -> Storage (Metric) ---
         let storedValue = userValue.toStoredWeight(system: unitSystem)
-        
         dataManager.addWeightEntry(date: selectedDate, weight: storedValue, goalType: currentGoalType)
         newWeight = ""
         showingAddWeight = false
@@ -137,5 +151,129 @@ struct WeightTrackerView: View {
                 dataManager.deleteWeightEntry(weights[index])
             }
         }
+    }
+}
+
+// MARK: - Feature Views
+
+struct JourneyProgressCard: View {
+    let currentKg: Double
+    let startKg: Double
+    let targetKg: Double
+    let goalType: String
+    let unitSystem: String
+    let cardColor: Color
+    
+    var progress: Double {
+        let totalDiff = abs(targetKg - startKg)
+        guard totalDiff > 0 else { return 1.0 }
+        let covered = abs(currentKg - startKg)
+        return min(max(covered / totalDiff, 0), 1)
+    }
+    
+    var displayTarget: String {
+        let val = targetKg.toUserWeight(system: unitSystem)
+        return String(format: "%.1f", val)
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "flag.checkered")
+                    .foregroundColor(.purple)
+                Text("To Goal")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            // Progress Bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.gray.opacity(0.2))
+                        .frame(height: 8)
+                    Capsule().fill(Color.purple)
+                        .frame(width: geo.size.width * progress, height: 8)
+                }
+            }
+            .frame(height: 8)
+            
+            HStack {
+                Text("\(Int(progress * 100))%")
+                    .font(.headline)
+                Spacer()
+                Text("Goal: \(displayTarget)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(12)
+        .frame(width: 160, height: 110)
+        .background(cardColor)
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+    }
+}
+
+struct StreakCard: View {
+    let weights: [WeightEntry]
+    let cardColor: Color
+    
+    var streak: Int {
+        let sorted = weights.map { Calendar.current.startOfDay(for: $0.date) }
+                            .sorted(by: >)
+        let uniqueDays = Array(Set(sorted)).sorted(by: >)
+        
+        guard let lastDate = uniqueDays.first else { return 0 }
+        
+        // Check if streak is alive (last entry must be today or yesterday)
+        let today = Calendar.current.startOfDay(for: Date())
+        let diff = Calendar.current.dateComponents([.day], from: lastDate, to: today).day ?? 0
+        if diff > 1 { return 0 }
+        
+        var count = 0
+        var currentDate = lastDate
+        
+        for date in uniqueDays {
+            if Calendar.current.isDate(date, inSameDayAs: currentDate) {
+                count += 1
+                currentDate = Calendar.current.date(byAdding: .day, value: -1, to: currentDate)!
+            } else {
+                break
+            }
+        }
+        return count
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "flame.fill")
+                    .foregroundColor(.orange)
+                Text("Streak")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text("\(streak)")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                Text("days")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+            }
+            .offset(y: -4)
+        }
+        .padding(12)
+        .frame(width: 100, height: 110, alignment: .topLeading)
+        .background(cardColor)
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
     }
 }
