@@ -83,6 +83,35 @@ enum GoalType: String, CaseIterable, Codable {
     case maintenance = "Maintenance"
 }
 
+// MARK: - Dashboard Card Types
+enum DashboardCardType: String, CaseIterable, Codable, Identifiable {
+    case projection = "Projections"
+    case weightChange = "Weight Change"
+    case weightTrend = "Weight History"
+    case workoutDistribution = "Workout Focus"
+    
+    var id: String { rawValue }
+}
+
+// MARK: - Time Range Enum
+enum TimeRange: String, CaseIterable, Identifiable {
+    case sevenDays = "7 Days"
+    case thirtyDays = "30 Days"
+    case ninetyDays = "90 Days"
+    case allTime = "All Time"
+    
+    var id: String { rawValue }
+    
+    func startDate(from now: Date) -> Date? {
+        switch self {
+        case .sevenDays: return Calendar.current.date(byAdding: .day, value: -7, to: now)
+        case .thirtyDays: return Calendar.current.date(byAdding: .day, value: -30, to: now)
+        case .ninetyDays: return Calendar.current.date(byAdding: .day, value: -90, to: now)
+        case .allTime: return nil
+        }
+    }
+}
+
 // MARK: - Extensions
 extension WorkoutCategories {
     var muscleGroups: [MuscleGroup] {
