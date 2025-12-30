@@ -12,6 +12,7 @@ struct DashboardView: View {
     @EnvironmentObject var healthManager: HealthManager
     @State private var viewModel = DashboardViewModel()
     
+    // MARK: - App Storage (Dashboard Display)
     @AppStorage("dailyCalorieGoal") private var dailyGoal: Int = 2000
     @AppStorage("targetWeight") private var targetWeight: Double = 70.0
     @AppStorage("goalType") private var goalType: String = "Cutting"
@@ -20,16 +21,12 @@ struct DashboardView: View {
     @AppStorage("enableCaloriesBurned") private var enableCaloriesBurned: Bool = true
     @AppStorage("maintenanceTolerance") private var maintenanceTolerance: Double = 2.0
     @AppStorage("unitSystem") private var unitSystem: String = UnitSystem.metric.rawValue
-    
-    @AppStorage("userGender") private var userGender: Gender = .male
     @AppStorage("isCalorieCountingEnabled") private var isCalorieCountingEnabled: Bool = true
-    
     @AppStorage("isDarkMode") private var isDarkMode: Bool = true
     
+    // MARK: - Local State
     @State private var showingSettings = false
-    @State private var showingReconfigureGoal = false
     @State private var showingMaintenanceInfo = false
-    
     @State private var visibleMethods: Set<String> = []
 
     var weightLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
@@ -61,13 +58,11 @@ struct DashboardView: View {
                     .spotlightTarget(.settings)
                 }
             }
+            // Present the new, separate SettingsView
             .sheet(isPresented: $showingSettings) {
-                settingsSheet
-            }
-            .sheet(isPresented: $showingReconfigureGoal) {
-                GoalConfigurationView(
-                    appEstimatedMaintenance: viewModel.estimatedMaintenance,
-                    latestWeightKg: weights.first?.weight
+                SettingsView(
+                    estimatedMaintenance: viewModel.estimatedMaintenance,
+                    currentWeight: weights.first?.weight
                 )
             }
             .alert("About Estimated Maintenance", isPresented: $showingMaintenanceInfo) {
@@ -92,6 +87,8 @@ struct DashboardView: View {
         }
     }
 
+    // MARK: - View Model Logic
+
     private func refreshViewModel() {
         let settings = DashboardSettings(
             dailyGoal: dailyGoal,
@@ -105,120 +102,6 @@ struct DashboardView: View {
         viewModel.updateMetrics(logs: logs, weights: weights, settings: settings)
     }
     
-    private var settingsSheet: some View {
-        NavigationStack {
-            Form {
-                Section("Preferences") {
-                    Picker("Unit System", selection: $unitSystem) {
-                        ForEach(UnitSystem.allCases, id: \.self) { system in
-                            Text(system.rawValue).tag(system.rawValue)
-                        }
-                    }
-                    Toggle("Dark Mode", isOn: $isDarkMode)
-                    Toggle("Enable Calorie Counting", isOn: $isCalorieCountingEnabled)
-                    
-                    if isCalorieCountingEnabled {
-                        Toggle("Track Calories Burned", isOn: $enableCaloriesBurned)
-                    }
-                }
-                
-                Section("Profile") {
-                    Picker("Gender", selection: $userGender) {
-                        ForEach(Gender.allCases, id: \.self) { gender in
-                            Text(gender.rawValue).tag(gender)
-                        }
-                    }
-                }
-                
-                if isCalorieCountingEnabled {
-                    Section("Current Goal") {
-                        HStack {
-                            Text("Goal Type")
-                            Spacer()
-                            Text(goalType).foregroundColor(.secondary)
-                        }
-                        HStack {
-                            Text(goalType == GoalType.maintenance.rawValue ? "Maintenance Weight" : "Target Weight")
-                            Spacer()
-                            Text("\(targetWeight.toUserWeight(system: unitSystem), specifier: "%.1f") \(weightLabel)")
-                                .foregroundColor(.secondary)
-                        }
-                        HStack {
-                            Text("Daily Calorie Goal")
-                            Spacer()
-                            Text("\(dailyGoal) kcal").foregroundColor(.secondary)
-                        }
-                        Button("Reconfigure Goal") {
-                            showingSettings = false
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                showingReconfigureGoal = true
-                            }
-                        }
-                        .foregroundColor(.blue)
-                        .bold()
-                    }
-                    
-                    Section("Prediction Logic") {
-                        if isCalorieCountingEnabled {
-                            Picker("Method", selection: $estimationMethod) {
-                                ForEach(EstimationMethod.allCases) { method in
-                                    Text(method.displayName).tag(method.rawValue)
-                                }
-                            }
-                        } else {
-                            Text(EstimationMethod.weightTrend30Day.displayName)
-                            Text("Calorie counting is disabled.")
-                                .font(.caption).foregroundColor(.secondary)
-                        }
-                    }
-                    
-                    if goalType == GoalType.maintenance.rawValue {
-                        Section("Maintenance Settings") {
-                            let toleranceBinding = Binding<Double>(
-                                get: { maintenanceTolerance.toUserWeight(system: unitSystem) },
-                                set: { maintenanceTolerance = $0.toStoredWeight(system: unitSystem) }
-                            )
-                            HStack {
-                                Text("Tolerance (+/- \(weightLabel))")
-                                Spacer()
-                                TextField("0.0", value: toleranceBinding, format: .number)
-                                    .keyboardType(.decimalPad)
-                                    .multilineTextAlignment(.trailing)
-                            }
-                        }
-                    }
-                }
-                
-                // --- NEW SECTION: Community & Support ---
-                Section("Community & Support") {
-                    // 1. Help & Support
-                    NavigationLink(destination: HelpSupportView()) {
-                        Label("Help and Support", systemImage: "questionmark.circle")
-                    }
-                    
-                    // 2. Follow Instagram
-                    if let url = URL(string: "https://www.instagram.com/repscale.app/") {
-                        Link(destination: url) {
-                            Label("Follow @RepScale.app", systemImage: "camera.fill")
-                        }
-                    }
-                    
-                    // 3. Review on App Store
-                    // NOTE: Replace 'idXXXXXXXXXX' with your actual App Store ID when available
-                    if let url = URL(string: "https://apps.apple.com/app/id1234567890?action=write-review") {
-                        Link(destination: url) {
-                            Label("Review on AppStore", systemImage: "star.fill")
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Settings")
-            .toolbar {
-                Button("Done") { showingSettings = false }
-            }
-        }
-    }
-
     private func setupOnAppear() {
         healthManager.fetchAllHealthData()
         let today = Calendar.current.startOfDay(for: Date())
@@ -237,6 +120,8 @@ struct DashboardView: View {
         
         refreshViewModel()
     }
+    
+    // MARK: - Dashboard Cards
     
     private var weightChangeCard: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -585,245 +470,5 @@ struct DashboardView: View {
         case "lower": return .brown
         default: return .gray
         }
-    }
-}
-
-// MARK: - Goal Configuration View (Reconfigure)
-
-struct GoalConfigurationView: View {
-    @Environment(\.dismiss) var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @FocusState private var isInputFocused: Bool
-    
-    let appEstimatedMaintenance: Int?
-    let latestWeightKg: Double?
-    
-    @AppStorage("userGender") private var userGender: Gender = .male
-    @AppStorage("unitSystem") private var unitSystem: String = UnitSystem.metric.rawValue
-    
-    @State private var targetWeight: Double? = nil
-    @State private var targetDate: Date = Calendar.current.date(byAdding: .month, value: 3, to: Date())!
-    
-    @State private var maintenanceSource: Int = 0
-    @State private var manualMaintenanceInput: String = ""
-    @State private var maintenanceDisplay: Int = 0
-
-    @State private var dailyGoal: Int = 0
-    @State private var calculatedDeficit: Int = 0
-    @State private var derivedGoalType: GoalType = .maintenance
-    
-    private var dataManager: DataManager {
-            DataManager(modelContext: modelContext)
-        }
-    
-    var unitLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
-    
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section(header: Text("Goal Details")) {
-                    HStack {
-                        Text("Current Weight")
-                        Spacer()
-                        if let w = latestWeightKg {
-                            Text("\(w.toUserWeight(system: unitSystem), specifier: "%.1f") \(unitLabel)")
-                                .foregroundColor(.secondary)
-                        } else {
-                            Text("No Data").foregroundColor(.red)
-                        }
-                    }
-                    
-                    HStack {
-                        Text("Target Weight (\(unitLabel))")
-                        Spacer()
-                        TextField("Required", value: $targetWeight, format: .number)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($isInputFocused)
-                            .onChange(of: targetWeight) { _, _ in recalculate() }
-                    }
-                    
-                    DatePicker("Target Date", selection: $targetDate, in: Date()..., displayedComponents: .date)
-                        .onChange(of: targetDate) { _, _ in recalculate() }
-                }
-                
-                Section(header: Text("Maintenance Calorie Source")) {
-                    Picker("Source", selection: $maintenanceSource) {
-                        Text("Formula").tag(0)
-                        if appEstimatedMaintenance != nil {
-                            Text("App Estimate").tag(1)
-                        }
-                        Text("Manual").tag(2)
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: maintenanceSource) { _, _ in recalculate() }
-                    
-                    if maintenanceSource == 2 {
-                        HStack {
-                            Text("Manual Maintenance")
-                            Spacer()
-                            TextField("kcal", text: $manualMaintenanceInput)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
-                                .focused($isInputFocused)
-                                .onChange(of: manualMaintenanceInput) { _, _ in recalculate() }
-                        }
-                    } else {
-                        HStack {
-                            Text("Base Maintenance")
-                            Spacer()
-                            Text("\(maintenanceDisplay) kcal").bold()
-                        }
-                    }
-                }
-                
-                Section(header: Text("Results")) {
-                    HStack {
-                        Text("Goal Type")
-                        Spacer()
-                        Text(derivedGoalType.rawValue)
-                            .bold()
-                            .foregroundColor(derivedGoalType == .cutting ? .green : (derivedGoalType == .bulking ? .red : .blue))
-                    }
-                    
-                    HStack {
-                        Text("Daily Calorie Goal")
-                        Spacer()
-                        Text("\(dailyGoal) kcal").bold().foregroundColor(.blue)
-                    }
-                    
-                    HStack {
-                        Text("Daily Adjustment")
-                        Spacer()
-                        Text(calculatedDeficit < 0 ? "\(calculatedDeficit) deficit" : "+\(calculatedDeficit) surplus")
-                            .font(.caption)
-                            .foregroundColor(calculatedDeficit < 0 ? .green : .orange)
-                    }
-                }
-                
-                Section {
-                    Button("Save Configuration") {
-                        save()
-                    }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .disabled(targetWeight == nil || latestWeightKg == nil || (maintenanceSource == 2 && manualMaintenanceInput.isEmpty))
-                }
-            }
-            .navigationTitle("Reconfigure Goal")
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") { isInputFocused = false }
-                }
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-            }
-            .onAppear {
-                if appEstimatedMaintenance != nil {
-                    maintenanceSource = 1
-                }
-                recalculate()
-            }
-        }
-    }
-    
-    private func recalculate() {
-        guard let currentKg = latestWeightKg else { return }
-        
-        switch maintenanceSource {
-        case 0:
-            let multiplier: Double = (userGender == .male) ? 32.0 : 29.0
-            maintenanceDisplay = Int(currentKg * multiplier)
-        case 1:
-            maintenanceDisplay = appEstimatedMaintenance ?? 2500
-        case 2:
-            maintenanceDisplay = Int(manualMaintenanceInput) ?? 0
-        default:
-            break
-        }
-        
-        guard let tWeightUser = targetWeight else { return }
-        let tWeightKg = tWeightUser.toStoredWeight(system: unitSystem)
-        
-        if tWeightKg > currentKg {
-            derivedGoalType = .bulking
-        } else if tWeightKg < currentKg {
-            derivedGoalType = .cutting
-        } else {
-            derivedGoalType = .maintenance
-        }
-        
-        let today = Calendar.current.startOfDay(for: Date())
-        let target = Calendar.current.startOfDay(for: targetDate)
-        let days = Calendar.current.dateComponents([.day], from: today, to: target).day ?? 1
-        
-        if days <= 0 {
-            dailyGoal = maintenanceDisplay
-            calculatedDeficit = 0
-            return
-        }
-        
-        let weightDiff = tWeightKg - currentKg
-        let totalCaloriesNeeded = weightDiff * 7700.0
-        let dailyAdjustment = Int(totalCaloriesNeeded / Double(days))
-        
-        calculatedDeficit = dailyAdjustment
-        dailyGoal = maintenanceDisplay + dailyAdjustment
-    }
-    
-    private func save() {
-        guard let tWeightUser = targetWeight else { return }
-        
-        let tWeightStored = tWeightUser.toStoredWeight(system: unitSystem)
-        UserDefaults.standard.set(tWeightStored, forKey: "targetWeight")
-        UserDefaults.standard.set(dailyGoal, forKey: "dailyCalorieGoal")
-        UserDefaults.standard.set(derivedGoalType.rawValue, forKey: "goalType")
-        UserDefaults.standard.set(maintenanceDisplay, forKey: "maintenanceCalories")
-        
-        let startW = latestWeightKg ?? 0.0
-        
-        dataManager.startNewGoalPeriod(
-            goalType: derivedGoalType.rawValue,
-            startWeight: startW,
-            targetWeight: tWeightStored,
-            dailyCalorieGoal: dailyGoal,
-            maintenanceCalories: maintenanceDisplay
-        )
-        
-        dismiss()
-    }
-}
-
-// MARK: - Help & Support View (NEW)
-struct HelpSupportView: View {
-    var body: some View {
-        List {
-            Section(header: Text("Common Questions")) {
-                DisclosureGroup("How is maintenance estimated?") {
-                    Text("We analyze your weight changes and calorie intake over the last 30 days to calculate your true maintenance level.")
-                        .font(.caption).foregroundColor(.secondary)
-                }
-                
-                DisclosureGroup("Why does my weight fluctuate?") {
-                    Text("Daily weight can vary due to water retention, salt intake, and digestion. Focus on the 30-day trend line.")
-                        .font(.caption).foregroundColor(.secondary)
-                }
-                
-                DisclosureGroup("Does it sync with HealthKit?") {
-                    Text("Yes! We pull Active Energy and Dietary Energy from Apple Health automatically. You can also add manual entries.")
-                        .font(.caption).foregroundColor(.secondary)
-                }
-            }
-            
-            Section(header: Text("Contact")) {
-                if let url = URL(string: "mailto:feedback@repscale.app") {
-                    Link(destination: url) {
-                        Label("Email Support", systemImage: "envelope")
-                    }
-                }
-            }
-        }
-        .navigationTitle("Help & Support")
     }
 }
