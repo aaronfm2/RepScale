@@ -12,10 +12,11 @@ struct WeightEntryDetailView: View {
     @State private var capturedImage: UIImage?
     @State private var showCamera = false
     @State private var showImageOptions = false
-    @State private var showPhotoLibrary = false // Controls the Photos Picker presentation
+    @State private var showPhotoLibrary = false
+    @State private var isProcessingImage = false // New state for loading indicator
     
     // --- Viewer & Delete State ---
-    @State private var selectedPhotoData: Data? // For full-screen viewer
+    @State private var selectedPhotoData: Data?
     @State private var showDeleteConfirmation = false
     @State private var photoToDelete: ProgressPhoto?
     
@@ -42,6 +43,18 @@ struct WeightEntryDetailView: View {
                     showImageOptions = true
                 } label: {
                     Label("Add Photos", systemImage: "photo.badge.plus")
+                }
+                .disabled(isProcessingImage) // Disable while processing
+                
+                if isProcessingImage {
+                    HStack {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Processing photo...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 8)
                 }
                 
                 if let photos = entry.photos, !photos.isEmpty {
@@ -70,7 +83,7 @@ struct WeightEntryDetailView: View {
         // --- 1. Selection Dialog ---
         .confirmationDialog("Add Photo", isPresented: $showImageOptions) {
             Button("Take Photo") { showCamera = true }
-            Button("Choose from Library") { showPhotoLibrary = true } // Triggers the picker below
+            Button("Choose from Library") { showPhotoLibrary = true }
             Button("Cancel", role: .cancel) { }
         }
         
@@ -79,7 +92,7 @@ struct WeightEntryDetailView: View {
             CameraPicker(selectedImage: $capturedImage)
         }
         
-        // --- 3. Photo Library Picker (Hidden Trigger) ---
+        // --- 3. Photo Library Picker ---
         .photosPicker(
             isPresented: $showPhotoLibrary,
             selection: $selectedItems,
@@ -114,34 +127,48 @@ struct WeightEntryDetailView: View {
         }
         
         // --- 6. Logic Handlers ---
-        // Handle Camera Image
         .onChange(of: capturedImage) { _, image in
             if let image = image {
                 saveImage(image)
             }
         }
-        // Handle Library Selection
         .onChange(of: selectedItems) { _, newItems in
             guard !newItems.isEmpty else { return }
             
             Task {
+                isProcessingImage = true
                 for item in newItems {
                     if let data = try? await item.loadTransferable(type: Data.self),
                        let image = UIImage(data: data) {
-                        saveImage(image)
+                        await processAndSave(image)
                     }
                 }
-                // Clear selection so we can pick again later
+                isProcessingImage = false
                 selectedItems.removeAll()
             }
         }
     }
     
+    // Wrapper to handle single image state
     private func saveImage(_ image: UIImage) {
-        // Apply watermark
-        let watermarkedImage = image.addWatermark(text: "RepScale.App")
+        Task {
+            isProcessingImage = true
+            await processAndSave(image)
+            isProcessingImage = false
+        }
+    }
+
+    // Heavy lifting moved to background thread
+    private func processAndSave(_ image: UIImage) async {
+        // 1. Offload expensive graphics/compression work
+        let processedData = await Task.detached(priority: .userInitiated) {
+            let watermarked = image.addWatermark(text: "RepScale.App")
+            // Compress to JPEG
+            return watermarked.jpegData(compressionQuality: 0.8)
+        }.value
         
-        if let data = watermarkedImage.jpegData(compressionQuality: 0.8) {
+        // 2. Insert into ModelContext (must be on MainActor)
+        if let data = processedData {
             let newPhoto = ProgressPhoto(imageData: data)
             newPhoto.weightEntry = entry
             modelContext.insert(newPhoto)
