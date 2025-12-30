@@ -11,7 +11,7 @@ struct SettingsView: View {
     // Internal State
     @State private var showingReconfigureGoal = false
     
-    // App Storage (Copied from DashboardView)
+    // App Storage
     @AppStorage("dailyCalorieGoal") private var dailyGoal: Int = 2000
     @AppStorage("targetWeight") private var targetWeight: Double = 70.0
     @AppStorage("goalType") private var goalType: String = "Cutting"
@@ -25,111 +25,168 @@ struct SettingsView: View {
     @AppStorage("isDarkMode") private var isDarkMode: Bool = true
     
     var weightLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
+    
+    // Helper for Goal Color (Used ONLY for status text)
+    var goalColor: Color {
+        switch GoalType(rawValue: goalType) {
+        case .cutting: return .green
+        case .bulking: return .red
+        case .maintenance: return .blue
+        default: return .primary
+        }
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Preferences") {
-                    Picker("Unit System", selection: $unitSystem) {
+                // MARK: - Section 1: General Preferences
+                Section {
+                    Picker(selection: $unitSystem) {
                         ForEach(UnitSystem.allCases, id: \.self) { system in
                             Text(system.rawValue).tag(system.rawValue)
                         }
+                    } label: {
+                        Label("Unit System", systemImage: "ruler")
+                            .foregroundColor(.primary)
                     }
-                    Toggle("Dark Mode", isOn: $isDarkMode)
-                    Toggle("Enable Calorie Counting", isOn: $isCalorieCountingEnabled)
                     
-                    if isCalorieCountingEnabled {
-                        Toggle("Track Calories Burned", isOn: $enableCaloriesBurned)
+                    Toggle(isOn: $isDarkMode) {
+                        Label("Dark Mode", systemImage: "moon")
+                            .foregroundColor(.primary)
                     }
-                }
-                
-                Section("Profile") {
-                    Picker("Gender", selection: $userGender) {
+                    
+                    Picker(selection: $userGender) {
                         ForEach(Gender.allCases, id: \.self) { gender in
                             Text(gender.rawValue).tag(gender)
                         }
+                    } label: {
+                        Label("Gender", systemImage: "person")
+                            .foregroundColor(.primary)
+                    }
+                } header: {
+                    Text("General")
+                }
+                
+                // MARK: - Section 2: Tracking Configuration
+                Section {
+                    Toggle(isOn: $isCalorieCountingEnabled) {
+                        Label("Enable Calorie Counting", systemImage: "flame")
+                            .foregroundColor(.primary)
+                    }
+                    
+                    if isCalorieCountingEnabled {
+                        Toggle(isOn: $enableCaloriesBurned) {
+                            Label("Track Calories Burned", systemImage: "figure.run")
+                                .foregroundColor(.primary)
+                        }
+                    }
+                } header: {
+                    Text("Tracking")
+                } footer: {
+                    if isCalorieCountingEnabled {
+                        Text("When enabled, active energy from Apple Health is deducted from your net calorie total.")
                     }
                 }
                 
+                // MARK: - Section 3: Goal Dashboard
                 if isCalorieCountingEnabled {
-                    Section("Current Goal") {
-                        HStack {
-                            Text("Goal Type")
-                            Spacer()
-                            Text(goalType).foregroundColor(.secondary)
+                    Section {
+                        // Strategy Summary
+                        LabeledContent {
+                            // Keep color here as it indicates status (Green/Red/Blue)
+                            Text(goalType)
+                                .fontWeight(.semibold)
+                                .foregroundColor(goalColor)
+                        } label: {
+                            Label("Goal Type", systemImage: "target")
+                                .foregroundColor(.primary)
                         }
-                        HStack {
-                            Text(goalType == GoalType.maintenance.rawValue ? "Maintenance Weight" : "Target Weight")
-                            Spacer()
+                        
+                        LabeledContent("Daily Target") {
+                            Text("\(dailyGoal) kcal")
+                                .monospacedDigit()
+                        }
+                        
+                        LabeledContent("Target Weight") {
                             Text("\(targetWeight.toUserWeight(system: unitSystem), specifier: "%.1f") \(weightLabel)")
-                                .foregroundColor(.secondary)
                         }
-                        HStack {
-                            Text("Daily Calorie Goal")
-                            Spacer()
-                            Text("\(dailyGoal) kcal").foregroundColor(.secondary)
-                        }
-                        Button("Reconfigure Goal") {
-                            // Delay slightly to allow the sheet animation to process if needed, 
-                            // or just toggle immediately. 
+                        
+                        // Action Button (Neutral)
+                        Button {
                             showingReconfigureGoal = true
+                        } label: {
+                            Label("Reconfigure Goal", systemImage: "slider.horizontal.3")
+                                .foregroundColor(.primary)
                         }
-                        .foregroundColor(.blue)
-                        .bold()
+                    } header: {
+                        Text("Strategy")
                     }
                     
-                    Section("Prediction Logic") {
-                        if isCalorieCountingEnabled {
-                            Picker("Method", selection: $estimationMethod) {
-                                ForEach(EstimationMethod.allCases) { method in
-                                    Text(method.displayName).tag(method.rawValue)
-                                }
+                    // Technical Settings
+                    Section {
+                        Picker(selection: $estimationMethod) {
+                            ForEach(EstimationMethod.allCases) { method in
+                                Text(method.displayName).tag(method.rawValue)
                             }
-                        } else {
-                            Text(EstimationMethod.weightTrend30Day.displayName)
-                            Text("Calorie counting is disabled.")
-                                .font(.caption).foregroundColor(.secondary)
+                        } label: {
+                            Label("Prediction Logic", systemImage: "chart.xyaxis.line")
+                                .foregroundColor(.primary)
                         }
-                    }
-                    
-                    if goalType == GoalType.maintenance.rawValue {
-                        Section("Maintenance Settings") {
+                        
+                        // Maintenance Tolerance
+                        if goalType == GoalType.maintenance.rawValue {
                             let toleranceBinding = Binding<Double>(
                                 get: { maintenanceTolerance.toUserWeight(system: unitSystem) },
                                 set: { maintenanceTolerance = $0.toStoredWeight(system: unitSystem) }
                             )
                             HStack {
-                                Text("Tolerance (+/- \(weightLabel))")
+                                Label("Weight Tolerance", systemImage: "arrow.left.and.right")
+                                    .foregroundColor(.primary)
                                 Spacer()
                                 TextField("0.0", value: toleranceBinding, format: .number)
                                     .keyboardType(.decimalPad)
                                     .multilineTextAlignment(.trailing)
+                                    .frame(width: 60)
+                                Text(weightLabel)
+                                    .foregroundColor(.secondary)
                             }
                         }
+                    } header: {
+                        Text("Calculations")
+                    } footer: {
+                        Text("Determines how the dashboard estimates your future progress.")
                     }
                 }
                 
-                Section("Community & Support") {
+                // MARK: - Section 4: Community
+                Section {
                     NavigationLink(destination: HelpSupportView()) {
-                        Label("Help and Support", systemImage: "questionmark.circle")
+                        Label("Help & Support", systemImage: "questionmark.circle")
+                            .foregroundColor(.primary)
                     }
                     
                     if let url = URL(string: "https://www.instagram.com/repscale.app/") {
                         Link(destination: url) {
-                            Label("Follow @RepScale.app", systemImage: "camera.fill")
+                            Label("Follow @RepScale.app", systemImage: "camera")
+                                .foregroundColor(.primary)
                         }
                     }
                     
                     if let url = URL(string: "https://apps.apple.com/app/id1234567890?action=write-review") {
                         Link(destination: url) {
-                            Label("Review on AppStore", systemImage: "star.fill")
+                            Label("Review on AppStore", systemImage: "star")
+                                .foregroundColor(.primary)
                         }
                     }
+                } header: {
+                    Text("Community")
                 }
             }
             .navigationTitle("Settings")
             .toolbar {
-                Button("Done") { dismiss() }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
             }
             .sheet(isPresented: $showingReconfigureGoal) {
                 GoalConfigurationView(
