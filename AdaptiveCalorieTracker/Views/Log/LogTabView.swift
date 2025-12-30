@@ -668,6 +668,7 @@ struct AppleHealthInfoSheet: View {
                             InstructionRow(num: 3, text: "RepScale will automatically read that data to update your daily summaries here.")
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
                     .background(isDarkMode ? Color.gray.opacity(0.1) : Color(uiColor: .secondarySystemGroupedBackground))
                     .cornerRadius(12)
@@ -684,6 +685,7 @@ struct AppleHealthInfoSheet: View {
                             InstructionRow(num: 3, text: "Then turn on all.")
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
                     .background(isDarkMode ? Color.gray.opacity(0.1) : Color(uiColor: .secondarySystemGroupedBackground))
                     .cornerRadius(12)
