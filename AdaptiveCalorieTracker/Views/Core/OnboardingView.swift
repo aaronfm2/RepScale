@@ -19,6 +19,9 @@ struct OnboardingView: View {
     
     @AppStorage("userGender") private var gender: Gender = .male
     
+    // --- NEW: Maintenance Tolerance ---
+    @AppStorage("maintenanceTolerance") private var maintenanceTolerance: Double = 2.0
+    
     @State private var currentWeight: Double? = nil
     @State private var targetWeight: Double? = nil
     @State private var goalType: GoalType = .cutting
@@ -44,7 +47,6 @@ struct OnboardingView: View {
         return unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg"
     }
     
-    // --- NEW: Custom Background Color ---
     var appBackgroundColor: Color {
         isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
     }
@@ -55,7 +57,6 @@ struct OnboardingView: View {
 
     var body: some View {
         ZStack {
-            // --- UPDATED: Use custom background ---
             appBackgroundColor.ignoresSafeArea()
             
             VStack {
@@ -106,7 +107,18 @@ struct OnboardingView: View {
     
     var cannotMoveForward: Bool {
         if currentStep == 1 { return currentWeight == nil }
-        if currentStep == 2 { return targetWeight == nil }
+        if currentStep == 2 {
+            // Maintenance check
+            if goalType == .maintenance { return false }
+            
+            guard let t = targetWeight, let c = currentWeight else { return true }
+            
+            // Validation check logic
+            if goalType == .cutting && t >= c { return true }
+            if goalType == .bulking && t <= c { return true }
+            
+            return false
+        }
         return false
     }
     
@@ -151,36 +163,64 @@ struct OnboardingView: View {
             }
             Section(footer: Text("We use this to estimate your baseline metabolic rate.")) { }
         }
-        // --- UPDATED: Blend Form with background ---
         .scrollContentBackground(.hidden)
         .background(appBackgroundColor)
     }
     
     var goalsStep: some View {
         Form {
-            Section(header: Text("Your Goal")) {
-                HStack {
-                    Text("Target Weight (\(unitLabel))")
-                    Spacer()
-                    TextField("Required", value: $targetWeight, format: .number)
+            Section(header: Text("Select Goal")) {
+                Picker("Goal Type", selection: $goalType) {
+                    ForEach(GoalType.allCases, id: \.self) { type in
+                        Text(type.rawValue).tag(type)
+                    }
+                }
+                .pickerStyle(.segmented)
+                // Note: removed implicit determineGoalType logic, user selects manually
+            }
+            
+            if goalType == .maintenance {
+                Section(header: Text("Maintenance Settings"), footer: Text("Weight fluctuations within this range (+/-) are considered normal maintenance.")) {
+                    HStack {
+                        Text("Tolerance (+/- \(unitLabel))")
+                        Spacer()
+                        TextField("2.0", value: Binding(
+                            get: { maintenanceTolerance.toUserWeight(system: unitSystem) },
+                            set: { maintenanceTolerance = $0.toStoredWeight(system: unitSystem) }
+                        ), format: .number)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
-                        .onChange(of: targetWeight) { _, _ in determineGoalType() }
+                    }
                 }
-                HStack {
-                    Text("Goal Type")
-                    Spacer()
-                    Text(goalType.rawValue)
-                        .fontWeight(.medium)
-                        .foregroundColor(goalTypeColor)
+            } else {
+                Section(header: Text("Target"), footer: validationFooter) {
+                    HStack {
+                        Text("Target Weight (\(unitLabel))")
+                        Spacer()
+                        TextField("Required", value: $targetWeight, format: .number)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                    }
                 }
             }
-            Section(footer: Text("We automatically calculate if you are cutting, bulking, or maintaining based on your target weight.")) {}
         }
-        .onAppear { determineGoalType() }
-        // --- UPDATED: Blend Form with background ---
         .scrollContentBackground(.hidden)
         .background(appBackgroundColor)
+    }
+    
+    @ViewBuilder
+    var validationFooter: some View {
+        if let t = targetWeight, let c = currentWeight {
+            if goalType == .cutting && t >= c {
+                Text("Target weight must be lower than current weight for cutting.").foregroundColor(.red)
+            } else if goalType == .bulking && t <= c {
+                Text("Target weight must be higher than current weight for bulking.").foregroundColor(.red)
+            } else {
+                Text("Enter your desired target weight.")
+            }
+        } else {
+            Text("Enter your desired target weight.")
+        }
     }
 
     var strategyStep: some View {
@@ -259,7 +299,6 @@ struct OnboardingView: View {
                 }
             }
         }
-        // --- UPDATED: Blend Form with background ---
         .scrollContentBackground(.hidden)
         .background(appBackgroundColor)
     }
@@ -284,26 +323,13 @@ struct OnboardingView: View {
                     Text("Maintenance: \(maintenanceInput) kcal").foregroundColor(.secondary)
                 }
                 .padding()
-                // Use a slightly lighter gray for the card in dark mode
                 .background(isDarkMode ? Color.white.opacity(0.1) : Color.gray.opacity(0.1))
                 .cornerRadius(10)
             }
         }
     }
     
-    func determineGoalType() {
-        guard let tWeight = targetWeight, let cWeight = currentWeight else {
-            goalType = .maintenance
-            return
-        }
-        if tWeight > cWeight {
-            goalType = .bulking
-        } else if tWeight < cWeight {
-            goalType = .cutting
-        } else {
-            goalType = .maintenance
-        }
-    }
+    // determineGoalType removed as it is now user-selected
     
     var goalTypeColor: Color {
         switch goalType {
@@ -324,17 +350,30 @@ struct OnboardingView: View {
     func calculateGoalFromDate() {
         guard !knowsDetails else { return }
         guard let maintenance = Int(maintenanceInput) else { return }
-        guard let tWeight = targetWeight, let cWeight = currentWeight else { return }
+        guard let cWeight = currentWeight else { return }
+        
         let currentKg = toKg(cWeight)
+        
+        // Handle Maintenance Case
+        if goalType == .maintenance {
+            dailyGoalInput = String(maintenance)
+            return
+        }
+        
+        // Handle Cutting/Bulking
+        guard let tWeight = targetWeight else { return }
         let targetKg = toKg(tWeight)
+        
         let today = Calendar.current.startOfDay(for: Date())
         let target = Calendar.current.startOfDay(for: targetDate)
         let components = Calendar.current.dateComponents([.day], from: today, to: target)
         let days = components.day ?? 1
+        
         guard days > 0 else {
             dailyGoalInput = String(maintenance)
             return
         }
+        
         let weightDiff = targetKg - currentKg
         let totalCaloriesNeeded = weightDiff * 7700.0
         let dailyAdjustment = Int(totalCaloriesNeeded / Double(days))
@@ -343,7 +382,17 @@ struct OnboardingView: View {
     }
     
     func completeOnboarding() {
-        guard let finalCurrent = currentWeight, let finalTarget = targetWeight else { return }
+        guard let finalCurrent = currentWeight else { return }
+        
+        // Resolve final target weight based on goal
+        let finalTarget: Double
+        if goalType == .maintenance {
+            finalTarget = finalCurrent
+        } else {
+            guard let t = targetWeight else { return }
+            finalTarget = t
+        }
+        
         let storedCurrentWeightKg = toKg(finalCurrent)
         let storedTargetWeightKg = toKg(finalTarget)
         
@@ -360,20 +409,20 @@ struct OnboardingView: View {
         }
         
         let firstEntry = WeightEntry(date: Date(), weight: storedCurrentWeightKg, note: "")
-                modelContext.insert(firstEntry)
+        modelContext.insert(firstEntry)
                 
-                // Start First Goal Period
-                dataManager.startNewGoalPeriod(
-                    goalType: storedGoalType,
-                    startWeight: storedCurrentWeightKg,
-                    targetWeight: storedTargetWeightKg,
-                    dailyCalorieGoal: storedDailyGoal,
-                    maintenanceCalories: storedMaintenance
-                )
+        // Start First Goal Period
+        dataManager.startNewGoalPeriod(
+            goalType: storedGoalType,
+            startWeight: storedCurrentWeightKg,
+            targetWeight: storedTargetWeightKg,
+            dailyCalorieGoal: storedDailyGoal,
+            maintenanceCalories: storedMaintenance
+        )
                 
-                isCompleted = true
-            }
-        }
+        isCompleted = true
+    }
+}
 
 extension View {
     func hideKeyboard() {
