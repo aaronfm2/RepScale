@@ -3,18 +3,18 @@ import SwiftData
 import Charts
 
 struct WeightStatsView: View {
+    // --- CLOUD SYNC: Injected Profile ---
+    var profile: UserProfile
+
     @Environment(\.dismiss) var dismiss
     @Query(sort: \GoalPeriod.startDate, order: .reverse) private var rawPeriods: [GoalPeriod]
     
-    @AppStorage("isDarkMode") private var isDarkMode: Bool = true
-    @AppStorage("unitSystem") private var unitSystem: String = UnitSystem.metric.rawValue
-
     var appBackgroundColor: Color {
-        isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
+        profile.isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
     }
     
     var cardBackgroundColor: Color {
-        isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
+        profile.isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
     }
     
     // MARK: - 1. Clean Data Logic

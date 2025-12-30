@@ -8,11 +8,10 @@ struct WeightTrackerView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \WeightEntry.date, order: .reverse) private var weights: [WeightEntry]
     
+    // We fetch all periods to determine streaks and phase history
     @Query(filter: #Predicate<GoalPeriod> { $0.endDate == nil }) private var activeGoalPeriods: [GoalPeriod]
     @Query(sort: \GoalPeriod.startDate, order: .reverse) private var allGoalPeriods: [GoalPeriod]
     
-    // REMOVED: @AppStorage variables (now using profile.*)
-
     var appBackgroundColor: Color {
         profile.isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
     }
@@ -40,7 +39,7 @@ struct WeightTrackerView: View {
     
     var weightLabel: String { profile.unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
     
-    // Helper to simplify the ViewBuilder and fix compiler timeout
+    // Helper to simplify the ViewBuilder
     private var startWeightForCurrentPeriod: Double {
         activeGoalPeriods.first?.startWeight ?? weights.last?.weight ?? weights.first?.weight ?? 70.0
     }
@@ -203,10 +202,10 @@ struct WeightTrackerView: View {
                 )
             }
             .sheet(isPresented: $showingStats) {
-                WeightStatsView()
+                // Pass profile to stats view
+                WeightStatsView(profile: profile)
             }
             .sheet(isPresented: $showingReconfigureGoal) {
-                // FIX: Pass profile to GoalConfigurationView
                 GoalConfigurationView(
                     profile: profile,
                     appEstimatedMaintenance: nil,
