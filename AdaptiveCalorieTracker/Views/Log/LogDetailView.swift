@@ -4,26 +4,23 @@ import SwiftData
 struct LogDetailView: View {
     @Bindable var log: DailyLog
     let workouts: [Workout]
-    // --- NEW: Accept optional WeightEntry ---
     let weightEntry: WeightEntry?
+    
+    // --- CLOUD SYNC: Injected Profile ---
+    var profile: UserProfile
     
     @EnvironmentObject var healthManager: HealthManager
     @State private var isSyncing = false
-    @AppStorage("enableCaloriesBurned") private var enableCaloriesBurned: Bool = true
-    @AppStorage("isCalorieCountingEnabled") private var isCalorieCountingEnabled: Bool = true
     @State private var showingEditOverrides = false
-    @AppStorage("isDarkMode") private var isDarkMode: Bool = true
     
-    // --- NEW: Unit Preference ---
-    @AppStorage("unitSystem") private var unitSystem: String = UnitSystem.metric.rawValue
-    var weightLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
+    var weightLabel: String { profile.unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
 
     var appBackgroundColor: Color {
-        isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
+        profile.isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
     }
     
     var cardBackgroundColor: Color {
-        isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
+        profile.isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
     }
     
     func groupExercises(_ exercises: [ExerciseEntry]) -> [(name: String, sets: [ExerciseEntry])] {
@@ -43,7 +40,7 @@ struct LogDetailView: View {
             VStack(spacing: 24) {
                 dateHeader
                 
-                if isCalorieCountingEnabled {
+                if profile.isCalorieCountingEnabled {
                     if log.isOverridden {
                         manualOverrideBanner
                     }
@@ -67,7 +64,7 @@ struct LogDetailView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack {
-                    if isCalorieCountingEnabled {
+                    if profile.isCalorieCountingEnabled {
                         Button("Edit") { showingEditOverrides = true }
                     }
                     
@@ -87,7 +84,7 @@ struct LogDetailView: View {
         }
     }
     
-    // --- NEW: Weight Section View ---
+    // --- Weight Section View ---
     private func weightSection(entry: WeightEntry) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -107,7 +104,7 @@ struct LogDetailView: View {
             }
             
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text("\(entry.weight.toUserWeight(system: unitSystem), specifier: "%.1f")")
+                Text("\(entry.weight.toUserWeight(system: profile.unitSystem), specifier: "%.1f")")
                     .font(.system(size: 32, weight: .bold, design: .rounded))
                     .foregroundColor(.primary)
                 Text(weightLabel)
@@ -150,7 +147,7 @@ struct LogDetailView: View {
             await MainActor.run {
                 withAnimation {
                     if data.consumed > 0 { log.caloriesConsumed = Int(data.consumed) + log.manualCalories }
-                    if enableCaloriesBurned { log.caloriesBurned = Int(data.burned) }
+                    if profile.enableCaloriesBurned { log.caloriesBurned = Int(data.burned) }
                     
                     if data.protein > 0 { log.protein = Int(data.protein) + log.manualProtein }
                     if data.carbs > 0 { log.carbs = Int(data.carbs) + log.manualCarbs }
@@ -204,9 +201,9 @@ struct LogDetailView: View {
             Text("Nutrition Total").font(.headline)
             
             HStack(spacing: 20) {
-                MacroCard(title: "Protein", value: log.protein, color: .red, backgroundColor: isDarkMode ? Color.gray.opacity(0.1) : Color(uiColor: .tertiarySystemGroupedBackground))
-                MacroCard(title: "Carbs", value: log.carbs, color: .blue, backgroundColor: isDarkMode ? Color.gray.opacity(0.1) : Color(uiColor: .tertiarySystemGroupedBackground))
-                MacroCard(title: "Fats", value: log.fat, color: .yellow, backgroundColor: isDarkMode ? Color.gray.opacity(0.1) : Color(uiColor: .tertiarySystemGroupedBackground))
+                MacroCard(title: "Protein", value: log.protein, color: .red, backgroundColor: profile.isDarkMode ? Color.gray.opacity(0.1) : Color(uiColor: .tertiarySystemGroupedBackground))
+                MacroCard(title: "Carbs", value: log.carbs, color: .blue, backgroundColor: profile.isDarkMode ? Color.gray.opacity(0.1) : Color(uiColor: .tertiarySystemGroupedBackground))
+                MacroCard(title: "Fats", value: log.fat, color: .yellow, backgroundColor: profile.isDarkMode ? Color.gray.opacity(0.1) : Color(uiColor: .tertiarySystemGroupedBackground))
             }
             
             Divider()
@@ -220,7 +217,7 @@ struct LogDetailView: View {
                 }
                 Spacer()
                 
-                if enableCaloriesBurned {
+                if profile.enableCaloriesBurned {
                     VStack(alignment: .trailing) {
                         Text("Calories Burned")
                             .font(.caption).foregroundColor(.secondary)
@@ -277,7 +274,6 @@ struct LogDetailView: View {
             .padding(.bottom, 5)
             Divider()
             
-            // FIX: Safely unwrap exercises
             if (w.exercises ?? []).isEmpty {
                 Text("No exercises logged.").font(.caption).italic().foregroundColor(.secondary)
             } else {
@@ -337,7 +333,7 @@ struct LogDetailView: View {
                     .frame(minHeight: 100)
                     .padding(4)
                     .scrollContentBackground(.hidden)
-                    .background(isDarkMode ? Color.gray.opacity(0.15) : Color.gray.opacity(0.1))
+                    .background(profile.isDarkMode ? Color.gray.opacity(0.15) : Color.gray.opacity(0.1))
                     .cornerRadius(8)
             }
             .padding(.horizontal)

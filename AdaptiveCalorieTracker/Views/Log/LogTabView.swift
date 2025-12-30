@@ -2,6 +2,9 @@ import SwiftUI
 import SwiftData
 
 struct LogTabView: View {
+    // --- CLOUD SYNC: Injected Profile ---
+    @Bindable var profile: UserProfile
+    
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \DailyLog.date, order: .reverse) private var logs: [DailyLog]
     
@@ -12,23 +15,14 @@ struct LogTabView: View {
     @Query(sort: \WeightEntry.date, order: .forward) private var weightEntries: [WeightEntry]
     
     @EnvironmentObject var healthManager: HealthManager
-    
-    @AppStorage("dailyCalorieGoal") private var dailyGoal: Int = 2000
-    @AppStorage("goalType") private var currentGoalType: String = GoalType.cutting.rawValue
-    @AppStorage("enableCaloriesBurned") private var enableCaloriesBurned: Bool = true
-    @AppStorage("isCalorieCountingEnabled") private var isCalorieCountingEnabled: Bool = true
-    @AppStorage("isDarkMode") private var isDarkMode: Bool = true
-    
-    // Apple Health Toggle
-    @AppStorage("enableHealthKitSync") private var enableHealthKitSync: Bool = true
 
     // MARK: - Color Palette
     var appBackgroundColor: Color {
-        isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
+        profile.isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
     }
     
     var cardBackgroundColor: Color {
-        isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
+        profile.isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
     }
     
     // Sheet State
@@ -81,7 +75,7 @@ struct LogTabView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Summary Header
-                if isCalorieCountingEnabled {
+                if profile.isCalorieCountingEnabled {
                     summaryHeader
                         .background(appBackgroundColor)
                         .padding(.top, 8)
@@ -95,7 +89,8 @@ struct LogTabView: View {
                                 NavigationLink(destination: LogDetailView(
                                     log: log,
                                     workouts: getWorkouts(for: log.date),
-                                    weightEntry: getWeightEntry(for: log.date)
+                                    weightEntry: getWeightEntry(for: log.date),
+                                    profile: profile
                                 )) {
                                     logRow(for: log)
                                 }
@@ -122,7 +117,7 @@ struct LogTabView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack {
-                        if enableHealthKitSync {
+                        if profile.enableHealthKitSync {
                             Button(action: refreshLast365Days) {
                                 if isRefreshingHistory {
                                     ProgressView()
@@ -153,31 +148,31 @@ struct LogTabView: View {
                 logSheetContent
             }
             .sheet(isPresented: $showingInfoSheet) {
-                AppleHealthInfoSheet()
+                AppleHealthInfoSheet(profile: profile)
             }
             .onAppear(perform: setupOnAppear)
             .onChange(of: healthManager.caloriesBurnedToday) { _, newValue in
-                if enableHealthKitSync {
+                if profile.enableHealthKitSync {
                     updateTodayLog { $0.caloriesBurned = Int(newValue) }
                 }
             }
             .onChange(of: healthManager.caloriesConsumedToday) { _, newValue in
-                if enableHealthKitSync && newValue > 0 {
+                if profile.enableHealthKitSync && newValue > 0 {
                     updateTodayLog { $0.caloriesConsumed = Int(newValue) + $0.manualCalories }
                 }
             }
             .onChange(of: healthManager.proteinToday) { _, newValue in
-                if enableHealthKitSync && newValue > 0 {
+                if profile.enableHealthKitSync && newValue > 0 {
                     updateTodayLog { $0.protein = Int(newValue) + $0.manualProtein }
                 }
             }
             .onChange(of: healthManager.carbsToday) { _, newValue in
-                if enableHealthKitSync && newValue > 0 {
+                if profile.enableHealthKitSync && newValue > 0 {
                     updateTodayLog { $0.carbs = Int(newValue) + $0.manualCarbs }
                 }
             }
             .onChange(of: healthManager.fatToday) { _, newValue in
-                if enableHealthKitSync && newValue > 0 {
+                if profile.enableHealthKitSync && newValue > 0 {
                     updateTodayLog { $0.fat = Int(newValue) + $0.manualFat }
                 }
             }
@@ -187,7 +182,7 @@ struct LogTabView: View {
     // MARK: - Helper Methods
     
     private func refreshLast365Days() {
-        guard enableHealthKitSync else { return }
+        guard profile.enableHealthKitSync else { return }
         isRefreshingHistory = true
         let firstWeightDate = weightEntries.first?.date
         
@@ -209,15 +204,15 @@ struct LogTabView: View {
                 await MainActor.run {
                     if let log = logs.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
                         log.caloriesConsumed = Int(data.consumed) + log.manualCalories
-                        if enableCaloriesBurned { log.caloriesBurned = Int(data.burned) }
+                        if profile.enableCaloriesBurned { log.caloriesBurned = Int(data.burned) }
                         log.protein = Int(data.protein) + log.manualProtein
                         log.carbs = Int(data.carbs) + log.manualCarbs
                         log.fat = Int(data.fat) + log.manualFat
                         
                     } else if data.consumed > 0 || data.burned > 0 {
-                        let newLog = DailyLog(date: date, goalType: currentGoalType)
+                        let newLog = DailyLog(date: date, goalType: profile.goalType)
                         newLog.caloriesConsumed = Int(data.consumed)
-                        if enableCaloriesBurned { newLog.caloriesBurned = Int(data.burned) }
+                        if profile.enableCaloriesBurned { newLog.caloriesBurned = Int(data.burned) }
                         newLog.protein = Int(data.protein)
                         newLog.carbs = Int(data.carbs)
                         newLog.fat = Int(data.fat)
@@ -255,7 +250,7 @@ struct LogTabView: View {
                     .pickerStyle(.segmented)
                 }
                 
-                if isCalorieCountingEnabled {
+                if profile.isCalorieCountingEnabled {
                     Section("Energy") {
                         HStack {
                             Text("Calories")
@@ -358,13 +353,13 @@ struct LogTabView: View {
                     log.fat = fVal
                 }
             }
-            if log.goalType == nil { log.goalType = currentGoalType }
+            if log.goalType == nil { log.goalType = profile.goalType }
         } else {
             let newLog = DailyLog(
                 date: logDate,
                 weight: latestWeight,
                 caloriesConsumed: calVal,
-                goalType: currentGoalType,
+                goalType: profile.goalType,
                 protein: pVal,
                 carbs: cVal,
                 fat: fVal
@@ -379,7 +374,7 @@ struct LogTabView: View {
     }
     
     private func setupOnAppear() {
-        if enableHealthKitSync {
+        if profile.enableHealthKitSync {
             healthManager.requestAuthorization()
             healthManager.fetchAllHealthData()
         }
@@ -399,7 +394,7 @@ struct LogTabView: View {
         if healthManager.caloriesConsumedToday > 0 {
             updateTodayLog { $0.caloriesConsumed = Int(healthManager.caloriesConsumedToday) + $0.manualCalories }
         }
-        if enableCaloriesBurned {
+        if profile.enableCaloriesBurned {
             updateTodayLog { $0.caloriesBurned = Int(healthManager.caloriesBurnedToday) }
         }
         if healthManager.proteinToday > 0 { updateTodayLog { $0.protein = Int(healthManager.proteinToday) + $0.manualProtein } }
@@ -412,7 +407,7 @@ struct LogTabView: View {
         if let todayLog = logs.first(where: { $0.date == todayDate }) {
             update(todayLog)
         } else {
-            let newLog = DailyLog(date: todayDate, goalType: currentGoalType)
+            let newLog = DailyLog(date: todayDate, goalType: profile.goalType)
             update(newLog)
             modelContext.insert(newLog)
         }
@@ -429,12 +424,12 @@ struct LogTabView: View {
     @ViewBuilder
     private var summaryHeader: some View {
         if let today = logs.first(where: { Calendar.current.isDateInToday($0.date) }) {
-            let burned = enableCaloriesBurned ? today.caloriesBurned : 0
+            let burned = profile.enableCaloriesBurned ? today.caloriesBurned : 0
             let consumed = today.caloriesConsumed
-            let remaining = dailyGoal + burned - consumed
+            let remaining = profile.dailyCalorieGoal + burned - consumed
             
             // Progress Calculation
-            let totalBudget = Double(dailyGoal + burned)
+            let totalBudget = Double(profile.dailyCalorieGoal + burned)
             let progress = totalBudget > 0 ? Double(consumed) / totalBudget : 0
             let isOverBudget = remaining < 0
             
@@ -467,14 +462,14 @@ struct LogTabView: View {
                     .frame(width: 100, height: 100)
                     
                     // 2. Stats Column
-                    if enableCaloriesBurned {
+                    if profile.enableCaloriesBurned {
                         // Full Layout with Exercise
                         VStack(spacing: 12) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Goal").font(.caption2).bold().foregroundColor(.secondary)
                                     HStack(spacing: 2) {
-                                        Text("\(dailyGoal)").font(.system(.callout, design: .rounded)).fontWeight(.semibold)
+                                        Text("\(profile.dailyCalorieGoal)").font(.system(.callout, design: .rounded)).fontWeight(.semibold)
                                         Text("kcal").font(.system(size: 10)).foregroundColor(.secondary)
                                     }
                                 }
@@ -519,7 +514,7 @@ struct LogTabView: View {
                                     .foregroundColor(.secondary)
                                     .textCase(.uppercase)
                                 HStack(spacing: 2) {
-                                    Text("\(dailyGoal)")
+                                    Text("\(profile.dailyCalorieGoal)")
                                         .font(.system(.title3, design: .rounded))
                                         .bold()
                                     Text("kcal").font(.system(size: 12)).foregroundColor(.secondary).fontWeight(.medium)
@@ -584,7 +579,7 @@ struct LogTabView: View {
                         .font(.body)
                         .foregroundColor(.primary)
                     
-                    if log.isOverridden && isCalorieCountingEnabled {
+                    if log.isOverridden && profile.isCalorieCountingEnabled {
                         Image(systemName: "o.circle.fill")
                             .font(.caption2)
                             .foregroundColor(.purple)
@@ -607,14 +602,14 @@ struct LogTabView: View {
             }
             Spacer()
             
-            if isCalorieCountingEnabled {
+            if profile.isCalorieCountingEnabled {
                 VStack(alignment: .trailing, spacing: 4) {
                     HStack(spacing: 4) {
                         Image(systemName: "fork.knife").font(.caption2)
                         Text("\(log.caloriesConsumed) kcal")
                     }.foregroundColor(.blue)
                     
-                    if enableCaloriesBurned {
+                    if profile.enableCaloriesBurned {
                         HStack(spacing: 4) {
                             Image(systemName: "flame.fill").font(.caption2)
                             Text("\(log.caloriesBurned) kcal")
@@ -631,8 +626,9 @@ struct LogTabView: View {
 struct AppleHealthInfoSheet: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var healthManager: HealthManager
-    @AppStorage("enableHealthKitSync") private var enableHealthKitSync: Bool = true
-    @AppStorage("isDarkMode") private var isDarkMode: Bool = true
+    
+    // --- CLOUD SYNC: Injected Profile ---
+    var profile: UserProfile
     
     var body: some View {
         NavigationStack {
@@ -655,8 +651,6 @@ struct AppleHealthInfoSheet: View {
                             .padding(.horizontal)
                     }
                     
-                    // Toggle Removed
-                    
                     // Instructions Section
                     VStack(alignment: .leading, spacing: 16) {
                         Text("How to connect other apps")
@@ -670,7 +664,7 @@ struct AppleHealthInfoSheet: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
-                    .background(isDarkMode ? Color.gray.opacity(0.1) : Color(uiColor: .secondarySystemGroupedBackground))
+                    .background(profile.isDarkMode ? Color.gray.opacity(0.1) : Color(uiColor: .secondarySystemGroupedBackground))
                     .cornerRadius(12)
                     .padding(.horizontal)
                     
@@ -687,7 +681,7 @@ struct AppleHealthInfoSheet: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
-                    .background(isDarkMode ? Color.gray.opacity(0.1) : Color(uiColor: .secondarySystemGroupedBackground))
+                    .background(profile.isDarkMode ? Color.gray.opacity(0.1) : Color(uiColor: .secondarySystemGroupedBackground))
                     .cornerRadius(12)
                     .padding(.horizontal)
                     
@@ -702,7 +696,7 @@ struct AppleHealthInfoSheet: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .background(isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground))
+            .background(profile.isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground))
         }
     }
 }

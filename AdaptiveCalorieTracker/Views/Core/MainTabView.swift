@@ -101,12 +101,12 @@ struct MainTabView: View {
                     .tabItem { Label("Dashboard", systemImage: "chart.bar.fill") }
                     .tag(0)
                 
-                // Note: You will likely need to update LogTabView and WeightTrackerView
-                // to accept 'profile' as well if they use shared settings.
-                LogTabView()
+                // Pass profile to LogTabView
+                LogTabView(profile: profile)
                     .tabItem { Label("Logs", systemImage: "list.bullet.clipboard.fill") }
                     .tag(1)
                 
+                // Pass profile to WorkoutTabView
                 WorkoutTabView(profile: profile)
                     .tabItem { Label("Workouts", systemImage: "figure.strengthtraining.traditional") }
                     .tag(2)
