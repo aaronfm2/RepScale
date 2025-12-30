@@ -409,6 +409,11 @@ struct OnboardingView: View {
         
         modelContext.insert(profile)
         
+        // --- ADDED THIS LINE ---
+        // Mark onboarding as complete in Keychain so it survives re-installs
+        KeychainManager.standard.setOnboardingComplete()
+        // -----------------------
+        
         // 5. Create First Weight Entry
         let firstEntry = WeightEntry(date: Date(), weight: storedCurrentWeightKg, note: "")
         modelContext.insert(firstEntry)
