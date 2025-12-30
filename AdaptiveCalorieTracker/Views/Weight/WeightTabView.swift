@@ -115,7 +115,7 @@ struct WeightTrackerView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { showingStats = true }) {
-                        Image(systemName: "chart.bar.fill")
+                        Image(systemName: "chart.bar")
                             .font(.body)
                     }
                 }

@@ -6,10 +6,27 @@ enum UnitSystem: String, CaseIterable, Codable {
     case imperial = "Imperial"
 }
 
-// MARK: - Gender (Moved from OnboardingView)
+// MARK: - Gender
 enum Gender: String, CaseIterable, Codable {
     case male = "Male"
     case female = "Female"
+}
+
+// MARK: - Estimation/Projection Methods
+enum EstimationMethod: Int, CaseIterable, Codable, Identifiable {
+    case weightTrend30Day = 0
+    case currentEatingHabits = 1
+    case perfectGoalAdherence = 2
+    
+    var id: Int { rawValue }
+    
+    var displayName: String {
+        switch self {
+        case .weightTrend30Day: return "30-Day Weight Trend"
+        case .currentEatingHabits: return "Current Average Calorie Consumption"
+        case .perfectGoalAdherence: return "Perfect Calorie Target Adherence"
+        }
+    }
 }
 
 // MARK: - Extensions for Conversion
@@ -32,7 +49,6 @@ extension Double {
 }
 
 // MARK: - Workout Categories
-
 enum WorkoutCategories: String, CaseIterable, Codable {
     case push = "Push"
     case pull = "Pull"
@@ -40,7 +56,6 @@ enum WorkoutCategories: String, CaseIterable, Codable {
     case lower = "Lower"
     case fullBody = "Full Body"
     case arms = "Arms"
-    
     case legs = "Legs"
     case chest = "Chest"
     case back = "Back"
@@ -50,7 +65,6 @@ enum WorkoutCategories: String, CaseIterable, Codable {
 }
 
 // MARK: - Muscle Groups
-
 enum MuscleGroup: String, CaseIterable, Codable {
     case chest = "Chest"
     case back = "Back"
@@ -63,7 +77,6 @@ enum MuscleGroup: String, CaseIterable, Codable {
 }
 
 // MARK: - Goals
-
 enum GoalType: String, CaseIterable, Codable {
     case cutting = "Cutting"
     case bulking = "Bulking"
@@ -71,9 +84,7 @@ enum GoalType: String, CaseIterable, Codable {
 }
 
 // MARK: - Extensions
-
 extension WorkoutCategories {
-
     var muscleGroups: [MuscleGroup] {
         switch self {
         case .push:
@@ -88,7 +99,6 @@ extension WorkoutCategories {
             return MuscleGroup.allCases
         case .arms:
             return [.biceps, .triceps]
-        // Handle specific muscle categories
         case .chest:
             return [.chest]
         case .back:

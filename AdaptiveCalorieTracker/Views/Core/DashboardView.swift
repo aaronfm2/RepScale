@@ -24,18 +24,17 @@ struct DashboardView: View {
     @AppStorage("userGender") private var userGender: Gender = .male
     @AppStorage("isCalorieCountingEnabled") private var isCalorieCountingEnabled: Bool = true
     
-    // --- Dark Mode State ---
     @AppStorage("isDarkMode") private var isDarkMode: Bool = true
     
     @State private var showingSettings = false
     @State private var showingReconfigureGoal = false
     @State private var showingMaintenanceInfo = false
+    
+    @State private var visibleMethods: Set<String> = []
 
     var weightLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
     
-    // --- Custom "Lighter" Dark Background ---
     var appBackgroundColor: Color {
-        // Uses a soft dark gray (approx #1C1C1E) instead of pure black
         isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
     }
 
@@ -81,7 +80,12 @@ struct DashboardView: View {
             .onChange(of: weights) { _, _ in refreshViewModel() }
             .onChange(of: dailyGoal) { _, _ in refreshViewModel() }
             .onChange(of: targetWeight) { _, _ in refreshViewModel() }
-            .onChange(of: estimationMethod) { _, _ in refreshViewModel() }
+            .onChange(of: estimationMethod) { _, _ in
+                refreshViewModel()
+                if let method = EstimationMethod(rawValue: estimationMethod) {
+                    visibleMethods = [method.displayName]
+                }
+            }
             .onChange(of: maintenanceCalories) { _, _ in refreshViewModel() }
             .onChange(of: maintenanceTolerance) { _, _ in refreshViewModel() }
             .onChange(of: isCalorieCountingEnabled) { _, _ in refreshViewModel() }
@@ -110,10 +114,7 @@ struct DashboardView: View {
                             Text(system.rawValue).tag(system.rawValue)
                         }
                     }
-                    
-                    // Dark Mode Toggle
                     Toggle("Dark Mode", isOn: $isDarkMode)
-                    
                     Toggle("Enable Calorie Counting", isOn: $isCalorieCountingEnabled)
                     
                     if isCalorieCountingEnabled {
@@ -136,20 +137,17 @@ struct DashboardView: View {
                             Spacer()
                             Text(goalType).foregroundColor(.secondary)
                         }
-                        
                         HStack {
                             Text(goalType == GoalType.maintenance.rawValue ? "Maintenance Weight" : "Target Weight")
                             Spacer()
                             Text("\(targetWeight.toUserWeight(system: unitSystem), specifier: "%.1f") \(weightLabel)")
                                 .foregroundColor(.secondary)
                         }
-                        
                         HStack {
                             Text("Daily Calorie Goal")
                             Spacer()
                             Text("\(dailyGoal) kcal").foregroundColor(.secondary)
                         }
-                        
                         Button("Reconfigure Goal") {
                             showingSettings = false
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -163,12 +161,12 @@ struct DashboardView: View {
                     Section("Prediction Logic") {
                         if isCalorieCountingEnabled {
                             Picker("Method", selection: $estimationMethod) {
-                                Text("30-Day Weight Trend").tag(0)
-                                Text("Avg 7 Day Cal Consumption").tag(1)
-                                Text("Fixed Daily Cal").tag(2)
+                                ForEach(EstimationMethod.allCases) { method in
+                                    Text(method.displayName).tag(method.rawValue)
+                                }
                             }
                         } else {
-                            Text("Fixed to 30-Day Weight Trend")
+                            Text(EstimationMethod.weightTrend30Day.displayName)
                             Text("Calorie counting is disabled.")
                                 .font(.caption).foregroundColor(.secondary)
                         }
@@ -205,28 +203,31 @@ struct DashboardView: View {
             let newItem = DailyLog(date: today, goalType: goalType)
             modelContext.insert(newItem)
         }
+        
+        if visibleMethods.isEmpty {
+            if let method = EstimationMethod(rawValue: estimationMethod) {
+                visibleMethods = [method.displayName]
+            } else {
+                visibleMethods = [EstimationMethod.weightTrend30Day.displayName]
+            }
+        }
+        
         refreshViewModel()
     }
     
-    // --- WEIGHT CHANGE CARD ---
     private var weightChangeCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Weight Change").font(.headline)
-            
-            // Grid Layout
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                // Iterates over the array from ViewModel. Requires WeightChangeMetric to be in scope.
                 ForEach(viewModel.weightChangeMetrics) { metric in
                     weightChangeCell(for: metric)
                 }
             }
         }
         .padding()
-        // Outer card background
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
     }
     
-    // Helper function used by weightChangeCard to fix compiler complexity issues
     private func weightChangeCell(for metric: WeightChangeMetric) -> some View {
         VStack(spacing: 6) {
             Text(metric.period)
@@ -236,34 +237,23 @@ struct DashboardView: View {
             
             if let val = metric.value {
                 let converted = val.toUserWeight(system: unitSystem)
-                
                 HStack(spacing: 4) {
-                    // Value
                     HStack(spacing: 0) {
                         Text(val > 0 ? "+" : "")
                         Text("\(converted, specifier: "%.1f")")
                         Text(" \(weightLabel)")
                     }
-                    .foregroundColor(.primary) // Neutral text color
-                    
-                    // Arrow Indicator
+                    .foregroundColor(.primary)
                     if val > 0 {
-                        Image(systemName: "arrow.up")
-                            .foregroundColor(.green)
-                            .font(.caption).bold()
+                        Image(systemName: "arrow.up").foregroundColor(.green).font(.caption).bold()
                     } else if val < 0 {
-                        Image(systemName: "arrow.down")
-                            .foregroundColor(.red)
-                            .font(.caption).bold()
+                        Image(systemName: "arrow.down").foregroundColor(.red).font(.caption).bold()
                     }
                 }
                 .font(.title3)
                 .fontWeight(.bold)
             } else {
-                Text("--")
-                    .font(.title3)
-                    .fontWeight(.bold)
-                    .foregroundColor(.secondary)
+                Text("--").font(.title3).fontWeight(.bold).foregroundColor(.secondary)
             }
         }
         .frame(maxWidth: .infinity)
@@ -334,9 +324,11 @@ struct DashboardView: View {
         let targetDisplay = targetWeight.toUserWeight(system: unitSystem)
         let toleranceDisplay = maintenanceTolerance.toUserWeight(system: unitSystem)
         
-        let projections = viewModel.projectionPoints.map { point in
-            ProjectionPoint(date: point.date, weight: point.weight.toUserWeight(system: unitSystem), method: point.method)
-        }
+        let projections = viewModel.projectionPoints
+            .filter { visibleMethods.contains($0.method) }
+            .map { point in
+                ProjectionPoint(date: point.date, weight: point.weight.toUserWeight(system: unitSystem), method: point.method)
+            }
         
         let allValues = projections.map { $0.weight } + [currentDisplay, targetDisplay]
         let minW = allValues.min() ?? 0
@@ -344,15 +336,60 @@ struct DashboardView: View {
         let lowerBound = max(0, minW - 5)
         let upperBound = maxW + 5
         
+        // Define colors
+        let methodColors: [EstimationMethod: Color] = [
+            .weightTrend30Day: .blue,
+            .currentEatingHabits: .purple,
+            .perfectGoalAdherence: .orange
+        ]
+        
+        // Map Display Strings -> Colors
+        var baseMapping: [String: Color] = [:]
+        for method in EstimationMethod.allCases {
+            baseMapping[method.displayName] = methodColors[method]
+        }
+        
+        // Create ordered keys for the legend based on enum order
+        let activeKeys = EstimationMethod.allCases
+            .map { $0.displayName }
+            .filter { visibleMethods.contains($0) }
+            
+        let activeColors = activeKeys.compactMap { baseMapping[$0] }
+        
         return VStack(alignment: .leading) {
-            Text("Projections (\(weightLabel))").font(.headline)
-            Text("Estimated weight over the next 60 days").font(.caption).foregroundColor(.secondary)
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("Projections (\(weightLabel))").font(.headline)
+                    Text("Estimated weight over next 60 days").font(.caption).foregroundColor(.secondary)
+                }
+                Spacer()
+                
+                Menu {
+                    Text("Visible Projections")
+                    ForEach(EstimationMethod.allCases) { method in
+                        if isCalorieCountingEnabled || method == .weightTrend30Day {
+                            Toggle(method.displayName, isOn: bindingForMethod(method.displayName))
+                        }
+                    }
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .padding(8)
+                        .background(Color.gray.opacity(0.1))
+                        .clipShape(Circle())
+                }
+            }
+            .padding(.bottom, 8)
             
             if currentWeightKg > 0 {
                 Chart {
                     RuleMark(y: .value("Target", targetDisplay))
                         .foregroundStyle(.green)
                         .lineStyle(StrokeStyle(lineWidth: 2, dash: [5]))
+                        .annotation(position: .top, alignment: .leading) {
+                            Text("Target").font(.caption).foregroundColor(.green)
+                        }
                     
                     if goalType == GoalType.maintenance.rawValue {
                         RuleMark(y: .value("Upper", targetDisplay + toleranceDisplay)).foregroundStyle(.green.opacity(0.3))
@@ -366,6 +403,8 @@ struct DashboardView: View {
                         .lineStyle(StrokeStyle(lineWidth: 3))
                     }
                 }
+                .chartForegroundStyleScale(domain: activeKeys, range: activeColors)
+                .chartLegend(.hidden)
                 .frame(height: 250)
                 .chartYScale(domain: lowerBound...upperBound)
                 .chartXAxis {
@@ -375,13 +414,50 @@ struct DashboardView: View {
                         AxisValueLabel(format: .dateTime.month().day())
                     }
                 }
-                .chartLegend(position: .bottom, spacing: 10)
+                
+                // --- Custom Legend ---
+                if !activeKeys.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Projection Method")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.secondary)
+                        
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], alignment: .leading, spacing: 8) {
+                            ForEach(activeKeys, id: \.self) { key in
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(baseMapping[key] ?? .gray)
+                                        .frame(width: 8, height: 8)
+                                    Text(key)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.top, 10)
+                }
+                
             } else {
                 Text("Log weight to see projections").frame(maxWidth: .infinity, alignment: .center).padding().font(.caption).foregroundColor(.secondary)
             }
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
+    }
+    
+    private func bindingForMethod(_ method: String) -> Binding<Bool> {
+        Binding(
+            get: { visibleMethods.contains(method) },
+            set: { shouldShow in
+                if shouldShow {
+                    visibleMethods.insert(method)
+                } else {
+                    visibleMethods.remove(method)
+                }
+            }
+        )
     }
     
     private var workoutDistributionCard: some View {
@@ -423,6 +499,7 @@ struct DashboardView: View {
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
     }
     
+    // --- UPDATED: Fixed Overflow Bug in AreaMark ---
     private var weightTrendCard: some View {
         let history = weights.map { (date: $0.date, weight: $0.weight.toUserWeight(system: unitSystem)) }
         let allWeights = history.map { $0.weight }
@@ -438,6 +515,21 @@ struct DashboardView: View {
             } else {
                 Chart {
                     ForEach(history.sorted(by: { $0.date < $1.date }), id: \.date) { item in
+                        // --- FIX 1: Set explicit yStart to lowerBound ---
+                        AreaMark(
+                            x: .value("Date", item.date),
+                            yStart: .value("Base", lowerBound),
+                            yEnd: .value("Weight", item.weight)
+                        )
+                        .interpolationMethod(.catmullRom)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.blue.opacity(0.2), .blue.opacity(0.0)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        
                         LineMark(x: .value("Date", item.date), y: .value("Weight", item.weight))
                         .interpolationMethod(.catmullRom)
                         .foregroundStyle(.blue)
@@ -454,6 +546,8 @@ struct DashboardView: View {
                          AxisValueLabel(format: .dateTime.month().day())
                      }
                  }
+                 // --- FIX 2: Ensure content doesn't overflow bounds ---
+                 .clipped()
             }
         }
         .padding()
@@ -487,16 +581,13 @@ struct GoalConfigurationView: View {
     @AppStorage("userGender") private var userGender: Gender = .male
     @AppStorage("unitSystem") private var unitSystem: String = UnitSystem.metric.rawValue
     
-    // Inputs
     @State private var targetWeight: Double? = nil
     @State private var targetDate: Date = Calendar.current.date(byAdding: .month, value: 3, to: Date())!
     
-    // Maintenance Source logic
-    @State private var maintenanceSource: Int = 0 // 0: Formula, 1: App Estimate, 2: Manual
+    @State private var maintenanceSource: Int = 0
     @State private var manualMaintenanceInput: String = ""
     @State private var maintenanceDisplay: Int = 0
 
-    // Calculated Outputs
     @State private var dailyGoal: Int = 0
     @State private var calculatedDeficit: Int = 0
     @State private var derivedGoalType: GoalType = .maintenance
@@ -620,20 +711,18 @@ struct GoalConfigurationView: View {
     private func recalculate() {
         guard let currentKg = latestWeightKg else { return }
         
-        // 1. Determine Maintenance
         switch maintenanceSource {
-        case 0: // Formula
+        case 0:
             let multiplier: Double = (userGender == .male) ? 32.0 : 29.0
             maintenanceDisplay = Int(currentKg * multiplier)
-        case 1: // App Estimate
+        case 1:
             maintenanceDisplay = appEstimatedMaintenance ?? 2500
-        case 2: // Manual
+        case 2:
             maintenanceDisplay = Int(manualMaintenanceInput) ?? 0
         default:
             break
         }
         
-        // 2. Determine Goal Type
         guard let tWeightUser = targetWeight else { return }
         let tWeightKg = tWeightUser.toStoredWeight(system: unitSystem)
         
@@ -645,7 +734,6 @@ struct GoalConfigurationView: View {
             derivedGoalType = .maintenance
         }
         
-        // 3. Calculate Daily Goal
         let today = Calendar.current.startOfDay(for: Date())
         let target = Calendar.current.startOfDay(for: targetDate)
         let days = Calendar.current.dateComponents([.day], from: today, to: target).day ?? 1
@@ -668,21 +756,21 @@ struct GoalConfigurationView: View {
         guard let tWeightUser = targetWeight else { return }
         
         let tWeightStored = tWeightUser.toStoredWeight(system: unitSystem)
-                UserDefaults.standard.set(tWeightStored, forKey: "targetWeight")
-                UserDefaults.standard.set(dailyGoal, forKey: "dailyCalorieGoal")
-                UserDefaults.standard.set(derivedGoalType.rawValue, forKey: "goalType")
-                UserDefaults.standard.set(maintenanceDisplay, forKey: "maintenanceCalories")
-                
-                let startW = latestWeightKg ?? 0.0
-                
-                dataManager.startNewGoalPeriod(
-                    goalType: derivedGoalType.rawValue,
-                    startWeight: startW,
-                    targetWeight: tWeightStored,
-                    dailyCalorieGoal: dailyGoal,
-                    maintenanceCalories: maintenanceDisplay
-                )
-                
-                dismiss()
-            }
-        }
+        UserDefaults.standard.set(tWeightStored, forKey: "targetWeight")
+        UserDefaults.standard.set(dailyGoal, forKey: "dailyCalorieGoal")
+        UserDefaults.standard.set(derivedGoalType.rawValue, forKey: "goalType")
+        UserDefaults.standard.set(maintenanceDisplay, forKey: "maintenanceCalories")
+        
+        let startW = latestWeightKg ?? 0.0
+        
+        dataManager.startNewGoalPeriod(
+            goalType: derivedGoalType.rawValue,
+            startWeight: startW,
+            targetWeight: tWeightStored,
+            dailyCalorieGoal: dailyGoal,
+            maintenanceCalories: maintenanceDisplay
+        )
+        
+        dismiss()
+    }
+}
