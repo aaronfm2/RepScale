@@ -21,7 +21,11 @@ struct AdaptiveCalorieTrackerApp: App {
             ExerciseDefinition.self,
             GoalPeriod.self
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            cloudKitDatabase: .automatic
+        )
 
         do {
             let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
