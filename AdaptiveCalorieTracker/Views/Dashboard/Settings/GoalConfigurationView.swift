@@ -12,6 +12,7 @@ struct GoalConfigurationView: View {
     
     @AppStorage("userGender") private var userGender: Gender = .male
     @AppStorage("unitSystem") private var unitSystem: String = UnitSystem.metric.rawValue
+    @AppStorage("maintenanceTolerance") private var maintenanceTolerance: Double = 2.0
     
     @State private var targetWeight: Double? = nil
     @State private var targetDate: Date = Calendar.current.date(byAdding: .month, value: 3, to: Date())!
@@ -110,6 +111,24 @@ struct GoalConfigurationView: View {
                         Text(calculatedDeficit < 0 ? "\(calculatedDeficit) deficit" : "+\(calculatedDeficit) surplus")
                             .font(.caption)
                             .foregroundColor(calculatedDeficit < 0 ? .green : .orange)
+                    }
+                }
+                
+                if derivedGoalType == .maintenance {
+                    Section(header: Text("Maintenance Range"), footer: Text("Weight fluctuations within this range (+/-) are considered normal maintenance.")) {
+                        HStack {
+                            Text("Tolerance")
+                            Spacer()
+                            TextField("0.0", value: Binding(
+                                get: { maintenanceTolerance.toUserWeight(system: unitSystem) },
+                                set: { maintenanceTolerance = $0.toStoredWeight(system: unitSystem) }
+                            ), format: .number)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .focused($isInputFocused)
+                            .frame(width: 80)
+                            Text(unitLabel).foregroundColor(.secondary)
+                        }
                     }
                 }
                 
