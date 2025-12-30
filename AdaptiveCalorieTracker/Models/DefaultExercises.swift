@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import SwiftUI
+import Security
 
 struct DefaultExercises {
     static let all: [ExerciseDefinition] = [
@@ -57,33 +58,77 @@ struct DefaultExercises {
         ExerciseDefinition(name: "Swimming", muscleGroups: ["Cardio"], isCardio: true)
     ]
     
-    /// Checks if defaults have been added. If not, adds them.
+    /// Checks if defaults have been added using Keychain persistence.
     @MainActor
     static func seed(context: ModelContext) {
-        // Check UserDefaults flag
-        let hasSeededKey = "hasSeededDefaultExercises"
-        let hasSeeded = UserDefaults.standard.bool(forKey: hasSeededKey)
-        
-        if !hasSeeded {
-            // Optional: Double check if DB is empty to be safe
-            // let descriptor = FetchDescriptor<ExerciseDefinition>()
-            // let count = try? context.fetchCount(descriptor)
-            
-            print("Seeding default exercises...")
-            
-            for exercise in all {
-                context.insert(exercise)
-            }
-            
-            // Mark as done so we don't duplicate on next launch
-            UserDefaults.standard.set(true, forKey: hasSeededKey)
-            
-            // Save context
-            do {
-                try context.save()
-            } catch {
-                print("Failed to seed exercises: \(error)")
-            }
+        // 1. Check Keychain. This survives app deletion/reinstall.
+        // If true, it means we have seeded before, so we do NOTHING and let CloudKit sync.
+        if KeychainHelper.hasSeeded() {
+            print("Keychain says we have seeded before. Skipping to avoid duplicates.")
+            return
         }
+        
+        // 2. Fallback Check: Database
+        // If the keychain is empty (weird edge case) but DB has data, mark keychain and skip.
+        let descriptor = FetchDescriptor<ExerciseDefinition>()
+        let count = (try? context.fetchCount(descriptor)) ?? 0
+        
+        if count > 0 {
+            print("Database has exercises. Marking Keychain and skipping.")
+            KeychainHelper.setSeeded()
+            return
+        }
+        
+        // 3. Only seed if BOTH Keychain and DB are empty (New User)
+        print("Seeding default exercises...")
+        
+        for exercise in all {
+            context.insert(exercise)
+        }
+        
+        // Save context and update Keychain
+        do {
+            try context.save()
+            KeychainHelper.setSeeded()
+            // Legacy flag update just in case
+            UserDefaults.standard.set(true, forKey: "hasSeededDefaultExercises")
+        } catch {
+            print("Failed to seed exercises: \(error)")
+        }
+    }
+}
+
+// MARK: - Keychain Helper
+// Encapsulates logic to read/write a flag that persists across reinstalls
+class KeychainHelper {
+    private static let service = "com.repscale.app.seeding"
+    private static let account = "hasSeededDefaultExercises"
+    
+    static func setSeeded() {
+        let data = "true".data(using: .utf8)!
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: data
+        ]
+        
+        // Delete any existing item to avoid error, then add
+        SecItemDelete(query as CFDictionary)
+        SecItemAdd(query as CFDictionary, nil)
+    }
+    
+    static func hasSeeded() -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        return status == errSecSuccess
     }
 }
