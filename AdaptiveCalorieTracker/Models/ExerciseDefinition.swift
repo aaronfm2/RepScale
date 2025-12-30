@@ -3,7 +3,7 @@ import SwiftData
 
 @Model
 final class ExerciseDefinition {
-    // FIX: Added default values as required by CloudKit for non-optional attributes
+    
     var name: String = ""
     var muscleGroups: [String] = [] // e.g. ["Chest", "Triceps"]
     var isCardio: Bool = false

@@ -55,7 +55,6 @@ struct RootView: View {
                     .preferredColorScheme(profile.isDarkMode ? .dark : .light)
             } else {
                 OnboardingView()
-                    .preferredColorScheme(.dark) // Default for onboarding
             }
         }
     }
