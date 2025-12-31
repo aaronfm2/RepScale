@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct AdaptiveCalorieTrackerApp: App {
+struct RepScaleApp: App {
     @StateObject private var healthManager = HealthManager()
     
     var sharedModelContainer: ModelContainer = {

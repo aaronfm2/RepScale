@@ -24,28 +24,28 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		69465D692EF4CC09005A3F99 /* AdaptiveCalorieTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AdaptiveCalorieTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		69465D7B2EF4CC0C005A3F99 /* AdaptiveCalorieTrackerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AdaptiveCalorieTrackerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		69465D852EF4CC0C005A3F99 /* AdaptiveCalorieTrackerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AdaptiveCalorieTrackerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		69465D692EF4CC09005A3F99 /* RepScale.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RepScale.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		69465D7B2EF4CC0C005A3F99 /* RepScaleTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RepScaleTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		69465D852EF4CC0C005A3F99 /* RepScaleUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RepScaleUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		698D57402F04582800B77350 /* Exceptions for "AdaptiveCalorieTracker" folder in "AdaptiveCalorieTracker" target */ = {
+		698D57402F04582800B77350 /* Exceptions for "RepScale" folder in "RepScale" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 69465D682EF4CC09005A3F99 /* AdaptiveCalorieTracker */;
+			target = 69465D682EF4CC09005A3F99 /* RepScale */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		69465D6B2EF4CC09005A3F99 /* AdaptiveCalorieTracker */ = {
+		69465D6B2EF4CC09005A3F99 /* RepScale */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				698D57402F04582800B77350 /* Exceptions for "AdaptiveCalorieTracker" folder in "AdaptiveCalorieTracker" target */,
+				698D57402F04582800B77350 /* Exceptions for "RepScale" folder in "RepScale" target */,
 			);
-			path = AdaptiveCalorieTracker;
+			path = RepScale;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -78,7 +78,7 @@
 		69465D602EF4CC09005A3F99 = {
 			isa = PBXGroup;
 			children = (
-				69465D6B2EF4CC09005A3F99 /* AdaptiveCalorieTracker */,
+				69465D6B2EF4CC09005A3F99 /* RepScale */,
 				69465D6A2EF4CC09005A3F99 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -86,9 +86,9 @@
 		69465D6A2EF4CC09005A3F99 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				69465D692EF4CC09005A3F99 /* AdaptiveCalorieTracker.app */,
-				69465D7B2EF4CC0C005A3F99 /* AdaptiveCalorieTrackerTests.xctest */,
-				69465D852EF4CC0C005A3F99 /* AdaptiveCalorieTrackerUITests.xctest */,
+				69465D692EF4CC09005A3F99 /* RepScale.app */,
+				69465D7B2EF4CC0C005A3F99 /* RepScaleTests.xctest */,
+				69465D852EF4CC0C005A3F99 /* RepScaleUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -96,9 +96,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		69465D682EF4CC09005A3F99 /* AdaptiveCalorieTracker */ = {
+		69465D682EF4CC09005A3F99 /* RepScale */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 69465D8F2EF4CC0C005A3F99 /* Build configuration list for PBXNativeTarget "AdaptiveCalorieTracker" */;
+			buildConfigurationList = 69465D8F2EF4CC0C005A3F99 /* Build configuration list for PBXNativeTarget "RepScale" */;
 			buildPhases = (
 				69465D652EF4CC09005A3F99 /* Sources */,
 				69465D662EF4CC09005A3F99 /* Frameworks */,
@@ -109,18 +109,18 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				69465D6B2EF4CC09005A3F99 /* AdaptiveCalorieTracker */,
+				69465D6B2EF4CC09005A3F99 /* RepScale */,
 			);
-			name = AdaptiveCalorieTracker;
+			name = RepScale;
 			packageProductDependencies = (
 			);
 			productName = AdaptiveCalorieTracker;
-			productReference = 69465D692EF4CC09005A3F99 /* AdaptiveCalorieTracker.app */;
+			productReference = 69465D692EF4CC09005A3F99 /* RepScale.app */;
 			productType = "com.apple.product-type.application";
 		};
-		69465D7A2EF4CC0C005A3F99 /* AdaptiveCalorieTrackerTests */ = {
+		69465D7A2EF4CC0C005A3F99 /* RepScaleTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 69465D922EF4CC0C005A3F99 /* Build configuration list for PBXNativeTarget "AdaptiveCalorieTrackerTests" */;
+			buildConfigurationList = 69465D922EF4CC0C005A3F99 /* Build configuration list for PBXNativeTarget "RepScaleTests" */;
 			buildPhases = (
 				69465D772EF4CC0C005A3F99 /* Sources */,
 				69465D782EF4CC0C005A3F99 /* Frameworks */,
@@ -131,16 +131,16 @@
 			dependencies = (
 				69465D7D2EF4CC0C005A3F99 /* PBXTargetDependency */,
 			);
-			name = AdaptiveCalorieTrackerTests;
+			name = RepScaleTests;
 			packageProductDependencies = (
 			);
 			productName = AdaptiveCalorieTrackerTests;
-			productReference = 69465D7B2EF4CC0C005A3F99 /* AdaptiveCalorieTrackerTests.xctest */;
+			productReference = 69465D7B2EF4CC0C005A3F99 /* RepScaleTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		69465D842EF4CC0C005A3F99 /* AdaptiveCalorieTrackerUITests */ = {
+		69465D842EF4CC0C005A3F99 /* RepScaleUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 69465D952EF4CC0C005A3F99 /* Build configuration list for PBXNativeTarget "AdaptiveCalorieTrackerUITests" */;
+			buildConfigurationList = 69465D952EF4CC0C005A3F99 /* Build configuration list for PBXNativeTarget "RepScaleUITests" */;
 			buildPhases = (
 				69465D812EF4CC0C005A3F99 /* Sources */,
 				69465D822EF4CC0C005A3F99 /* Frameworks */,
@@ -151,11 +151,11 @@
 			dependencies = (
 				69465D872EF4CC0C005A3F99 /* PBXTargetDependency */,
 			);
-			name = AdaptiveCalorieTrackerUITests;
+			name = RepScaleUITests;
 			packageProductDependencies = (
 			);
 			productName = AdaptiveCalorieTrackerUITests;
-			productReference = 69465D852EF4CC0C005A3F99 /* AdaptiveCalorieTrackerUITests.xctest */;
+			productReference = 69465D852EF4CC0C005A3F99 /* RepScaleUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -181,7 +181,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 69465D642EF4CC09005A3F99 /* Build configuration list for PBXProject "AdaptiveCalorieTracker" */;
+			buildConfigurationList = 69465D642EF4CC09005A3F99 /* Build configuration list for PBXProject "RepScale" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -195,9 +195,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				69465D682EF4CC09005A3F99 /* AdaptiveCalorieTracker */,
-				69465D7A2EF4CC0C005A3F99 /* AdaptiveCalorieTrackerTests */,
-				69465D842EF4CC0C005A3F99 /* AdaptiveCalorieTrackerUITests */,
+				69465D682EF4CC09005A3F99 /* RepScale */,
+				69465D7A2EF4CC0C005A3F99 /* RepScaleTests */,
+				69465D842EF4CC0C005A3F99 /* RepScaleUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -253,12 +253,12 @@
 /* Begin PBXTargetDependency section */
 		69465D7D2EF4CC0C005A3F99 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 69465D682EF4CC09005A3F99 /* AdaptiveCalorieTracker */;
+			target = 69465D682EF4CC09005A3F99 /* RepScale */;
 			targetProxy = 69465D7C2EF4CC0C005A3F99 /* PBXContainerItemProxy */;
 		};
 		69465D872EF4CC0C005A3F99 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 69465D682EF4CC09005A3F99 /* AdaptiveCalorieTracker */;
+			target = 69465D682EF4CC09005A3F99 /* RepScale */;
 			targetProxy = 69465D862EF4CC0C005A3F99 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -389,14 +389,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
-				CODE_SIGN_ENTITLEMENTS = AdaptiveCalorieTracker/AdaptiveCalorieTracker.entitlements;
+				CODE_SIGN_ENTITLEMENTS = RepScale/RepScale.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_ASSET_PATHS = "\"AdaptiveCalorieTracker/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"RepScale/Preview Content\"";
 				DEVELOPMENT_TEAM = 63CX6JD94M;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = AdaptiveCalorieTracker/Info.plist;
+				INFOPLIST_FILE = RepScale/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RepScale;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "We need this to track your weight.";
@@ -411,7 +411,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = AJFM.AdaptiveCalorieTracker;
+				PRODUCT_BUNDLE_IDENTIFIER = AJFM.RepScale;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -425,14 +425,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
-				CODE_SIGN_ENTITLEMENTS = AdaptiveCalorieTracker/AdaptiveCalorieTracker.entitlements;
+				CODE_SIGN_ENTITLEMENTS = RepScale/RepScale.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_ASSET_PATHS = "\"AdaptiveCalorieTracker/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"RepScale/Preview Content\"";
 				DEVELOPMENT_TEAM = 63CX6JD94M;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = AdaptiveCalorieTracker/Info.plist;
+				INFOPLIST_FILE = RepScale/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RepScale;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "We need this to track your weight.";
@@ -447,7 +447,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = AJFM.AdaptiveCalorieTracker;
+				PRODUCT_BUNDLE_IDENTIFIER = AJFM.RepScale;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -470,7 +470,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AdaptiveCalorieTracker.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AdaptiveCalorieTracker";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RepScale.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/RepScale";
 			};
 			name = Debug;
 		};
@@ -489,7 +489,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AdaptiveCalorieTracker.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AdaptiveCalorieTracker";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RepScale.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/RepScale";
 			};
 			name = Release;
 		};
@@ -530,7 +530,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		69465D642EF4CC09005A3F99 /* Build configuration list for PBXProject "AdaptiveCalorieTracker" */ = {
+		69465D642EF4CC09005A3F99 /* Build configuration list for PBXProject "RepScale" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				69465D8D2EF4CC0C005A3F99 /* Debug */,
@@ -539,7 +539,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		69465D8F2EF4CC0C005A3F99 /* Build configuration list for PBXNativeTarget "AdaptiveCalorieTracker" */ = {
+		69465D8F2EF4CC0C005A3F99 /* Build configuration list for PBXNativeTarget "RepScale" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				69465D902EF4CC0C005A3F99 /* Debug */,
@@ -548,7 +548,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		69465D922EF4CC0C005A3F99 /* Build configuration list for PBXNativeTarget "AdaptiveCalorieTrackerTests" */ = {
+		69465D922EF4CC0C005A3F99 /* Build configuration list for PBXNativeTarget "RepScaleTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				69465D932EF4CC0C005A3F99 /* Debug */,
@@ -557,7 +557,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		69465D952EF4CC0C005A3F99 /* Build configuration list for PBXNativeTarget "AdaptiveCalorieTrackerUITests" */ = {
+		69465D952EF4CC0C005A3F99 /* Build configuration list for PBXNativeTarget "RepScaleUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				69465D962EF4CC0C005A3F99 /* Debug */,
