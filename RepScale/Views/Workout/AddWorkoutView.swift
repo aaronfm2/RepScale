@@ -116,22 +116,23 @@ extension AddWorkoutView {
                 }
             }
             
-            DisclosureGroup("Muscles Trained (\(viewModel.selectedMuscles.count))") {
-                ForEach(MuscleGroup.allCases, id: \.self) { muscle in
-                    HStack {
-                        Text(muscle.rawValue)
-                        Spacer()
-                        if viewModel.selectedMuscles.contains(muscle.rawValue) {
-                            Image(systemName: "checkmark").foregroundColor(.blue)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        if viewModel.selectedMuscles.contains(muscle.rawValue) {
-                            viewModel.selectedMuscles.remove(muscle.rawValue)
-                        } else {
-                            viewModel.selectedMuscles.insert(muscle.rawValue)
-                        }
+            // IMPROVEMENT: Navigates to a separate screen to avoid confusion
+            NavigationLink {
+                MuscleSelectionList(selectedMuscles: $viewModel.selectedMuscles)
+            } label: {
+                HStack {
+                    Text("Target Muscles")
+                    Spacer()
+                    if viewModel.selectedMuscles.isEmpty {
+                        Text("None")
+                            .foregroundColor(.secondary)
+                    } else {
+                        // Display a clean, truncated list of selected muscles
+                        Text(viewModel.selectedMuscles.sorted().joined(separator: ", "))
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                     }
                 }
             }
@@ -153,7 +154,6 @@ extension AddWorkoutView {
             ForEach(viewModel.groupedExercises, id: \.name) { group in
                 Section {
                     ForEach(Array(group.exercises.enumerated()), id: \.element) { index, ex in
-                        // --- UPDATED: Pass profile.unitSystem ---
                         EditExerciseRow(exercise: ex, index: index, unitSystem: profile.unitSystem)
                             .swipeActions(edge: .leading) {
                                 Button {
@@ -298,7 +298,7 @@ struct RestTimerSection: View {
                 timeRemaining -= 1
             } else {
                 // Timer Finished
-                playAlertSound() // 2. Trigger sound here
+                playAlertSound()
                 stopTimer()
             }
         }
@@ -321,10 +321,7 @@ struct RestTimerSection: View {
         timeRemaining = 0
     }
     
-    // 3. Helper to play sound
     func playAlertSound() {
-        // 1005 is the standard "alert" sound on iOS.
-        // kSystemSoundID_Vibrate (4095) can be used for vibration.
         AudioServicesPlaySystemSound(1005)
         AudioServicesPlaySystemSound(1005)
         AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
@@ -335,16 +332,12 @@ struct RestTimerSection: View {
 struct EditExerciseRow: View {
     @Bindable var exercise: ExerciseEntry
     let index: Int
-    
-    // --- NEW: Unit System injected from parent ---
     let unitSystem: String
     
-    // Computed labels
     var weightLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
     var distLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "mi" : "km" }
     
     var body: some View {
-        // --- Custom Bindings for Conversion ---
         let weightBinding = Binding<Double?>(
             get: { exercise.weight?.toUserWeight(system: unitSystem) },
             set: { exercise.weight = $0?.toStoredWeight(system: unitSystem) }
@@ -367,7 +360,6 @@ struct EditExerciseRow: View {
                 
                 if exercise.isCardio {
                     HStack {
-                        // Use distBinding and distLabel
                         TextField("Dist", value: distBinding, format: .number)
                             .keyboardType(.decimalPad)
                             .frame(width: 60)
@@ -397,7 +389,6 @@ struct EditExerciseRow: View {
                         Text("x").foregroundColor(.secondary)
                         Spacer()
                         
-                        // Use weightBinding and weightLabel
                         TextField("Weight", value: weightBinding, format: .number)
                             .keyboardType(.decimalPad)
                             .frame(width: 60)
@@ -411,7 +402,6 @@ struct EditExerciseRow: View {
                 }
             }
             
-            // Optional Note Field
             TextField("Add note...", text: $exercise.note)
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -432,20 +422,17 @@ struct AddExerciseSheet: View {
     
     @State private var searchText = ""
     
-    // Logic to filter exercises
     var filteredExercises: [ExerciseDefinition] {
         if searchText.isEmpty { return libraryExercises }
         return libraryExercises.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
     
-    // Exercises that match the workout's target muscles
     var recommendedExercises: [ExerciseDefinition] {
         libraryExercises.filter { ex in
             !Set(ex.muscleGroups).isDisjoint(with: workoutMuscles)
         }
     }
     
-    // All other exercises
     var otherExercises: [ExerciseDefinition] {
         libraryExercises.filter { ex in
             Set(ex.muscleGroups).isDisjoint(with: workoutMuscles)
@@ -455,7 +442,6 @@ struct AddExerciseSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                // 1. Custom Exercise Option
                 Section {
                     NavigationLink {
                         CustomExerciseForm(onSave: { newEx in
@@ -468,7 +454,6 @@ struct AddExerciseSheet: View {
                     }
                 }
                 
-                // 2. Search Results or Smart Categories
                 if !searchText.isEmpty {
                     ForEach(filteredExercises) { ex in
                         ExerciseRow(exercise: ex) { addExercise(ex) }
@@ -537,7 +522,6 @@ struct ExerciseRow: View {
                 }
                 Spacer()
                 
-                // Visual Indicator
                 if exercise.isCardio {
                     Image(systemName: "heart.fill")
                         .foregroundColor(.red)
@@ -554,7 +538,7 @@ struct ExerciseRow: View {
                         .clipShape(Circle())
                 }
             }
-            .contentShape(Rectangle()) // Ensures the whole row is tappable
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -568,7 +552,6 @@ struct CustomExerciseForm: View {
     @State private var isCardio = false
     @State private var note = ""
     
-    // Library Saving State
     @State private var saveToLibrary = false
     @State private var selectedMuscles: Set<String> = []
     
@@ -586,7 +569,6 @@ struct CustomExerciseForm: View {
                 Text("Save this exercise to your library for future use.")
             }
             
-            // Conditional Section: Only show if saving to library
             if saveToLibrary {
                 Section("Target Muscles (Required)") {
                     ForEach(MuscleGroup.allCases, id: \.self) { muscle in
@@ -624,7 +606,6 @@ struct CustomExerciseForm: View {
     }
     
     func saveAndFinish() {
-        // 1. Save to Library if requested
         if saveToLibrary {
             let newDef = ExerciseDefinition(
                 name: name,
@@ -634,7 +615,6 @@ struct CustomExerciseForm: View {
             modelContext.insert(newDef)
         }
         
-        // 2. Add to current workout
         let newEx = ExerciseEntry(
             name: name,
             isCardio: isCardio,
@@ -669,7 +649,6 @@ struct LoadTemplateSheet: View {
                                         .font(.caption).foregroundColor(.secondary)
                                 }
                                 Spacer()
-                                // FIX: Safely unwrap optional exercises count
                                 Text("\((template.exercises ?? []).count) exercises")
                                     .font(.caption).foregroundColor(.secondary)
                                 Image(systemName: "plus.circle")
@@ -688,5 +667,42 @@ struct LoadTemplateSheet: View {
                 Button("Cancel") { dismiss() }
             }
         }
+    }
+}
+
+// MARK: - New Muscle Selection List View
+struct MuscleSelectionList: View {
+    @Binding var selectedMuscles: Set<String>
+    
+    var body: some View {
+        Form {
+            Section {
+                ForEach(MuscleGroup.allCases, id: \.self) { muscle in
+                    HStack {
+                        Text(muscle.rawValue)
+                        Spacer()
+                        if selectedMuscles.contains(muscle.rawValue) {
+                            Image(systemName: "checkmark")
+                                .foregroundColor(.blue)
+                                .fontWeight(.bold)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if selectedMuscles.contains(muscle.rawValue) {
+                            selectedMuscles.remove(muscle.rawValue)
+                        } else {
+                            selectedMuscles.insert(muscle.rawValue)
+                        }
+                    }
+                }
+            } header: {
+                Text("Select Muscles")
+            } footer: {
+                Text("These are auto-selected based on your Category, but you can customize them here if you did extra isolation work.")
+            }
+        }
+        .navigationTitle("Muscles")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
