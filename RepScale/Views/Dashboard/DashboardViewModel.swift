@@ -15,13 +15,20 @@ struct ProjectionPoint: Identifiable {
     let id = UUID()
     let date: Date
     let weight: Double
-    let method: String // Storing displayName here for Chart compatibility
+    let method: String
 }
 
 struct WeightChangeMetric: Identifiable {
     let id = UUID()
     let period: String
     let value: Double?
+}
+
+struct WeeklyProgress {
+    let completedCount: Int
+    let totalGoal: Int
+    let percentage: Double
+    let activeWeekdays: Set<Int> // 1 = Sunday, 2 = Monday, ...
 }
 
 @Observable
@@ -31,13 +38,14 @@ class DashboardViewModel {
     var projectionPoints: [ProjectionPoint] = []
     var weightChangeMetrics: [WeightChangeMetric] = []
     
+    var weeklyProgress: WeeklyProgress?
+    
     var logicDescription: String = ""
     var progressWarningMessage: String = ""
     
-    func updateMetrics(logs: [DailyLog], weights: [WeightEntry], settings: DashboardSettings) {
+    func updateMetrics(logs: [DailyLog], weights: [WeightEntry], settings: DashboardSettings, workouts: [Workout], weeklyGoal: Int) {
         
         let rawMethod = settings.isCalorieCountingEnabled ? settings.estimationMethod : 0
-        // Convert raw Int to Enum, default to trend if invalid
         let effectiveMethod = EstimationMethod(rawValue: rawMethod) ?? .weightTrend30Day
         
         updateLogicDescription(method: effectiveMethod)
@@ -64,7 +72,39 @@ class DashboardViewModel {
         )
         
         calculateWeightChanges(weights: weights)
+        
+        calculateWeeklyProgress(workouts: workouts, weeklyGoal: weeklyGoal)
     }
+    
+    // MARK: - Updated Weekly Logic
+    
+    private func calculateWeeklyProgress(workouts: [Workout], weeklyGoal: Int) {
+        let calendar = Calendar.current
+        let today = Date()
+        
+        // Find start of current week
+        guard let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today)) else { return }
+        
+        // Filter workouts in this week
+        let thisWeekWorkouts = workouts.filter { $0.date >= startOfWeek }
+        
+        // Identify which days have workouts
+        let activeDays = Set(thisWeekWorkouts.map { calendar.component(.weekday, from: $0.date) })
+        
+        // UPDATED: Count unique days, not total workouts
+        let count = activeDays.count
+        
+        let percentage = weeklyGoal > 0 ? min(Double(count) / Double(weeklyGoal), 1.0) : 0.0
+        
+        self.weeklyProgress = WeeklyProgress(
+            completedCount: count,
+            totalGoal: weeklyGoal,
+            percentage: percentage,
+            activeWeekdays: activeDays
+        )
+    }
+    
+    // MARK: - Existing Logic
     
     private func calculateWeightChanges(weights: [WeightEntry]) {
         guard let latestEntry = weights.first else {
@@ -221,7 +261,6 @@ class DashboardViewModel {
         var points: [ProjectionPoint] = []
         let today = Date()
         
-        // Filter methods if calorie counting is disabled
         let methodsToUse: [EstimationMethod] = settings.isCalorieCountingEnabled
             ? EstimationMethod.allCases
             : [.weightTrend30Day]
@@ -234,7 +273,6 @@ class DashboardViewModel {
                 maintenanceCalories: settings.maintenanceCalories,
                 dailyGoal: settings.dailyGoal
             ) {
-                // Use .displayName so the Chart sees the string it expects
                 let label = method.displayName
                 
                 points.append(ProjectionPoint(date: today, weight: startWeight, method: label))

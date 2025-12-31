@@ -191,13 +191,14 @@ struct SettingsView: View {
                                 .foregroundColor(.primary)
                         }
                     }
-                    
-                    if let url = URL(string: "https://apps.apple.com/app/id6757196736?action=write-review") {
-                        Link(destination: url) {
-                            Label("Review on AppStore", systemImage: "star")
-                                .foregroundColor(.primary)
-                        }
-                    }
+
+// Add this once I have an app store id.
+//                    if let url = URL(string: "https://apps.apple.com/app/id6757196736?action=write-review") {
+//                        Link(destination: url) {
+//                            Label("Review on AppStore", systemImage: "star")
+//                                .foregroundColor(.primary)
+//                        }
+//                    }
                 } header: {
                     Text("Community")
                 }

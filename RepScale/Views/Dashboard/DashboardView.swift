@@ -8,9 +8,7 @@ struct DashboardCardConfig: Identifiable, Codable, Equatable {
     var id: String { type.rawValue }
 }
 
-// MARK: - Main View
 struct DashboardView: View {
-    // --- CLOUD SYNC: Source of Truth ---
     @Bindable var profile: UserProfile
     
     @Environment(\.modelContext) private var modelContext
@@ -22,10 +20,8 @@ struct DashboardView: View {
     @EnvironmentObject var healthManager: HealthManager
     @State private var viewModel = DashboardViewModel()
     
-    // --- Layout State (Loaded from Profile) ---
     @State private var layout: [DashboardCardConfig] = []
     
-    // Time Ranges (Synced via Profile)
     var workoutTimeRange: TimeRange {
         get { TimeRange(rawValue: profile.workoutTimeRange) ?? .thirtyDays }
         nonmutating set { profile.workoutTimeRange = newValue.rawValue }
@@ -36,21 +32,19 @@ struct DashboardView: View {
         nonmutating set { profile.weightHistoryTimeRange = newValue.rawValue }
     }
     
-    // --- Local UI State ---
     @State private var showingSettings = false
     @State private var showingCustomization = false
     @State private var showingMaintenanceInfo = false
     @State private var showingReconfigureGoal = false
     @State private var visibleMethods: Set<String> = []
+    @State private var showingGoalEdit = false
 
-    // Helper Accessors
     var weightLabel: String { profile.unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
     
     var appBackgroundColor: Color {
         profile.isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
     }
     
-    // UPDATED: Reverted to always return blue as requested
     var goalColor: Color {
         return .blue
     }
@@ -59,11 +53,8 @@ struct DashboardView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    // 1. Fixed Card (Always Top)
                     targetProgressCard
                     
-                    // 2. Movable Cards
-                    // FIX: Iterating indices is easier for the compiler than enumerated()
                     ForEach(layout.indices, id: \.self) { index in
                         let card = layout[index]
                         if card.isVisible {
@@ -77,20 +68,16 @@ struct DashboardView: View {
             .background(appBackgroundColor)
             .navigationTitle("Dashboard")
             .toolbar {
-                // Leading: Customization
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { showingCustomization = true }) {
-                        Image(systemName: "slider.horizontal.3")
-                            .foregroundColor(.blue)
+                        Image(systemName: "slider.horizontal.3").foregroundColor(.blue)
                     }
                     .spotlightTarget(.dashboardCustomize)
                 }
                 
-                // Trailing: Settings
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showingSettings = true }) {
-                        Image(systemName: "gearshape.fill")
-                            .foregroundColor(.blue)
+                        Image(systemName: "gearshape.fill").foregroundColor(.blue)
                     }
                     .spotlightTarget(.settings)
                 }
@@ -106,12 +93,14 @@ struct DashboardView: View {
                 CustomizationSheet(layout: $layout, onSave: saveLayout)
             }
             .sheet(isPresented: $showingReconfigureGoal) {
-                // FIX: Added 'profile' argument here
                 GoalConfigurationView(
                     profile: profile,
                     appEstimatedMaintenance: viewModel.estimatedMaintenance,
                     latestWeightKg: weights.first?.weight
                 )
+            }
+            .sheet(isPresented: $showingGoalEdit) {
+                WeeklyGoalEditSheet(goal: $profile.weeklyWorkoutGoal)
             }
             .alert("About Estimated Maintenance", isPresented: $showingMaintenanceInfo) {
                 Button("OK", role: .cancel) { }
@@ -119,11 +108,12 @@ struct DashboardView: View {
                 Text("This is based on your weight change and your calories consumed over the last 30 days. Please note this number should only be used as a guide.")
             }
             .onAppear(perform: setupOnAppear)
-            // Refresh logic when CloudKit data changes
             .onChange(of: logs) { _, _ in refreshViewModel() }
             .onChange(of: weights) { _, _ in refreshViewModel() }
+            .onChange(of: workouts) { _, _ in refreshViewModel() }
             .onChange(of: profile.dailyCalorieGoal) { _, _ in refreshViewModel() }
             .onChange(of: profile.targetWeight) { _, _ in refreshViewModel() }
+            .onChange(of: profile.weeklyWorkoutGoal) { _, _ in refreshViewModel() }
             .onChange(of: profile.estimationMethod) { _, _ in
                 refreshViewModel()
                 if let method = EstimationMethod(rawValue: profile.estimationMethod) {
@@ -147,44 +137,32 @@ struct DashboardView: View {
             weightTrendCard(index: index, totalCount: totalCount)
         case .workoutDistribution:
             workoutDistributionCard(index: index, totalCount: totalCount)
+        case .weeklyWorkoutGoal:
+            weeklyGoalCard(index: index, totalCount: totalCount)
         }
     }
     
-    // MARK: - Reorder Arrows Component
     @ViewBuilder
     private func reorderArrows(index: Int, totalCount: Int) -> some View {
         HStack(spacing: 4) {
-            // Up Arrow
             if index > 0 {
                 Button(action: { moveCardUp(index) }) {
                     Image(systemName: "chevron.up")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.secondary)
-                        .padding(6)
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(Circle())
+                        .font(.caption2).fontWeight(.bold).foregroundColor(.secondary)
+                        .padding(6).background(Color.secondary.opacity(0.1)).clipShape(Circle())
                 }
                 .buttonStyle(.plain)
             }
-            
-            // Down Arrow
             if index < totalCount - 1 {
                 Button(action: { moveCardDown(index) }) {
                     Image(systemName: "chevron.down")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.secondary)
-                        .padding(6)
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(Circle())
+                        .font(.caption2).fontWeight(.bold).foregroundColor(.secondary)
+                        .padding(6).background(Color.secondary.opacity(0.1)).clipShape(Circle())
                 }
                 .buttonStyle(.plain)
             }
         }
     }
-
-    // MARK: - Logic & Persistence
     
     private func moveCardUp(_ index: Int) {
         guard index > 0 else { return }
@@ -214,7 +192,6 @@ struct DashboardView: View {
     }
     
     private func loadLayout() {
-        // Load layout from the CloudKit Profile JSON string
         if let data = profile.dashboardLayoutJSON.data(using: .utf8),
            let decoded = try? JSONDecoder().decode([DashboardCardConfig].self, from: data),
            !decoded.isEmpty {
@@ -228,7 +205,6 @@ struct DashboardView: View {
     }
     
     private func saveLayout() {
-        // Save layout to the CloudKit Profile JSON string
         if let data = try? JSONEncoder().encode(layout),
            let json = String(data: data, encoding: .utf8) {
             profile.dashboardLayoutJSON = json
@@ -244,7 +220,6 @@ struct DashboardView: View {
     }
     
     private func refreshViewModel() {
-        // Build settings from Profile data
         let settings = DashboardSettings(
             dailyGoal: profile.dailyCalorieGoal,
             targetWeight: profile.targetWeight,
@@ -254,10 +229,14 @@ struct DashboardView: View {
             enableCaloriesBurned: profile.enableCaloriesBurned,
             isCalorieCountingEnabled: profile.isCalorieCountingEnabled
         )
-        viewModel.updateMetrics(logs: logs, weights: weights, settings: settings)
+        viewModel.updateMetrics(
+            logs: logs,
+            weights: weights,
+            settings: settings,
+            workouts: workouts,
+            weeklyGoal: profile.weeklyWorkoutGoal
+        )
     }
-    
-    // MARK: - Card Definitions
     
     private var targetProgressCard: some View {
         let currentWeightKg = weights.first?.weight
@@ -280,9 +259,7 @@ struct DashboardView: View {
                     Spacer()
                     VStack(alignment: .trailing, spacing: 4) {
                         Button(action: { showingReconfigureGoal = true }) {
-                            Image(systemName: "gearshape.fill")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            Image(systemName: "gearshape.fill").font(.caption).foregroundColor(.secondary)
                         }
                         .offset(x: 6, y: -10)
                         
@@ -337,7 +314,6 @@ struct DashboardView: View {
             }
         }
         .padding(20)
-        // UPDATED: Enhanced Visuals (Gradient, Border, Shadow) with Always Blue
         .background(
             RoundedRectangle(cornerRadius: 24)
                 .fill(
@@ -355,23 +331,92 @@ struct DashboardView: View {
         .shadow(color: goalColor.opacity(0.15), radius: 10, x: 0, y: 5)
     }
     
+    private func weeklyGoalCard(index: Int, totalCount: Int) -> some View {
+        let progress = viewModel.weeklyProgress ?? WeeklyProgress(completedCount: 0, totalGoal: 3, percentage: 0, activeWeekdays: [])
+        let calendar = Calendar.current
+        let todayWeekday = calendar.component(.weekday, from: Date())
+        let days = ["M", "T", "W", "T", "F", "S", "S"]
+        
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Completed Workout Days")
+                    .font(.headline)
+                
+                Spacer()
+                
+                Button(action: { showingGoalEdit = true }) {
+                    Image(systemName: "gearshape.fill")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+                .padding(.trailing, 8)
+                
+                reorderArrows(index: index, totalCount: totalCount)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Completed \(progress.completedCount) of \(progress.totalGoal) days this week")
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("\(Int(progress.percentage * 100))%")
+                        .bold().foregroundColor(.secondary)
+                }
+                .font(.subheadline)
+                
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.gray.opacity(0.2)).frame(height: 8)
+                        Capsule().fill(Color.blue)
+                            .frame(width: max(geo.size.width * progress.percentage, 0), height: 8)
+                            .animation(.spring, value: progress.percentage)
+                    }
+                }
+                .frame(height: 8)
+            }
+            
+            HStack(spacing: 0) {
+                ForEach(0..<7, id: \.self) { i in
+                    let weekdayIndex = (i + 1) % 7 + 1
+                    let isToday = (weekdayIndex == todayWeekday)
+                    let hasWorkout = progress.activeWeekdays.contains(weekdayIndex)
+                    
+                    VStack {
+                        ZStack {
+                            Circle().fill(hasWorkout ? Color.blue.opacity(0.15) : Color.gray.opacity(0.1))
+                            if isToday { Circle().stroke(Color.green, lineWidth: 2) }
+                            Text(days[i]).font(.caption).fontWeight(.bold)
+                                .foregroundColor(hasWorkout ? .blue : .secondary)
+                        }
+                        .frame(height: 35)
+                        
+                        if hasWorkout {
+                            Circle().fill(Color.blue).frame(width: 4, height: 4)
+                        } else {
+                            Circle().fill(Color.clear).frame(width: 4, height: 4)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
+    }
+    
     private func weightChangeCard(index: Int, totalCount: Int) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Header with Arrows
             HStack {
                 Text("Weight Change").font(.headline)
                 Spacer()
                 reorderArrows(index: index, totalCount: totalCount)
             }
-            
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ForEach(viewModel.weightChangeMetrics) { metric in
                     weightChangeCell(for: metric)
                 }
             }
         }
-        .padding()
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
+        .padding().background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
     }
     
     private func weightChangeCell(for metric: WeightChangeMetric) -> some View {
@@ -394,8 +439,7 @@ struct DashboardView: View {
                 Text("--").font(.title3).fontWeight(.bold).foregroundColor(.secondary)
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity).padding(.vertical, 14)
         .background(RoundedRectangle(cornerRadius: 10).fill(Color.gray.opacity(0.1)))
     }
     
@@ -432,8 +476,6 @@ struct DashboardView: View {
                     Text("Estimated weight over next 60 days").font(.caption).foregroundColor(.secondary)
                 }
                 Spacer()
-                
-                // Moved Menu BEFORE Arrows to push arrows to far right
                 Menu {
                     Text("Visible Projections")
                     ForEach(EstimationMethod.allCases) { method in
@@ -442,9 +484,9 @@ struct DashboardView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "chart.line.uptrend.xyaxis").font(.title3).foregroundStyle(.primary).padding(8).background(Color.gray.opacity(0.1)).clipShape(Circle())
+                    Image(systemName: "chart.line.uptrend.xyaxis").font(.title3).foregroundStyle(.primary)
+                        .padding(8).background(Color.gray.opacity(0.1)).clipShape(Circle())
                 }
-                
                 reorderArrows(index: index, totalCount: totalCount)
             }
             .padding(.bottom, 8)
@@ -495,7 +537,6 @@ struct DashboardView: View {
     }
     
     private func workoutDistributionCard(index: Int, totalCount: Int) -> some View {
-        // Filter Logic
         let filteredWorkouts: [Workout]
         if let startDate = workoutTimeRange.startDate(from: Date()) {
             filteredWorkouts = workouts.filter { $0.date >= startDate }
@@ -507,33 +548,20 @@ struct DashboardView: View {
         let data = counts.sorted(by: { $0.value > $1.value }).map { (cat: $0.key, count: $0.value) }
 
         return VStack(alignment: .leading) {
-            // Header with Arrows and Menu
             HStack {
                 Text("Workout Focus").font(.headline)
                 Spacer()
-                
-                // Moved Menu BEFORE Arrows to push arrows to far right
                 Menu {
                     ForEach(TimeRange.allCases) { range in
-                        Button(action: {
-                            self.workoutTimeRange = range
-                        }) {
+                        Button(action: { self.workoutTimeRange = range }) {
                             Label(range.rawValue, systemImage: workoutTimeRange == range ? "checkmark" : "")
                         }
                     }
                 } label: {
-                    HStack(spacing: 4) {
-                        Text(workoutTimeRange.rawValue)
-                        Image(systemName: "chevron.down")
-                    }
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.blue)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.blue.opacity(0.1), in: Capsule())
+                    HStack(spacing: 4) { Text(workoutTimeRange.rawValue); Image(systemName: "chevron.down") }
+                        .font(.caption).fontWeight(.medium).foregroundColor(.blue)
+                        .padding(.horizontal, 8).padding(.vertical, 4).background(Color.blue.opacity(0.1), in: Capsule())
                 }
-                
                 reorderArrows(index: index, totalCount: totalCount)
             }
             .padding(.bottom, 4)
@@ -543,7 +571,8 @@ struct DashboardView: View {
             } else {
                 HStack(spacing: 20) {
                     Chart(data, id: \.cat) { item in
-                        SectorMark(angle: .value("Count", item.count), innerRadius: .ratio(0.6), angularInset: 2).cornerRadius(5).foregroundStyle(byCategoryColor(item.cat))
+                        SectorMark(angle: .value("Count", item.count), innerRadius: .ratio(0.6), angularInset: 2)
+                            .cornerRadius(5).foregroundStyle(byCategoryColor(item.cat))
                     }.frame(height: 150).frame(maxWidth: 150)
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(data, id: \.cat) { item in
@@ -561,7 +590,6 @@ struct DashboardView: View {
     }
     
     private func weightTrendCard(index: Int, totalCount: Int) -> some View {
-        // --- 1. FILTER HISTORY ---
         let filteredWeights: [WeightEntry]
         if let startDate = weightHistoryTimeRange.startDate(from: Date()) {
             filteredWeights = weights.filter { $0.date >= startDate }
@@ -575,50 +603,35 @@ struct DashboardView: View {
         let upperBound = (allWeights.max() ?? 100) + 5
         
         return VStack(alignment: .leading) {
-            // Header with Arrows
             HStack {
                 Text("Weight History (\(weightLabel))").font(.headline)
                 Spacer()
-                
-                // --- 2. TIME RANGE MENU ---
                 Menu {
                     ForEach(TimeRange.allCases) { range in
-                        Button(action: {
-                            self.weightHistoryTimeRange = range
-                        }) {
+                        Button(action: { self.weightHistoryTimeRange = range }) {
                             Label(range.rawValue, systemImage: weightHistoryTimeRange == range ? "checkmark" : "")
                         }
                     }
                 } label: {
-                    HStack(spacing: 4) {
-                        Text(weightHistoryTimeRange.rawValue)
-                        Image(systemName: "chevron.down")
-                    }
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.blue)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.blue.opacity(0.1), in: Capsule())
+                    HStack(spacing: 4) { Text(weightHistoryTimeRange.rawValue); Image(systemName: "chevron.down") }
+                        .font(.caption).fontWeight(.medium).foregroundColor(.blue)
+                        .padding(.horizontal, 8).padding(.vertical, 4).background(Color.blue.opacity(0.1), in: Capsule())
                 }
-                
                 reorderArrows(index: index, totalCount: totalCount)
             }
-            .padding(.bottom, 4) // Spacing below header
+            .padding(.bottom, 4)
             
             if filteredWeights.isEmpty {
-                Text("No weight data available for this period.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
+                Text("No weight data available for this period.").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .center).padding()
             } else {
                 Chart {
                     ForEach(history.sorted(by: { $0.date < $1.date }), id: \.date) { item in
                         AreaMark(x: .value("Date", item.date), yStart: .value("Base", lowerBound), yEnd: .value("Weight", item.weight))
-                            .interpolationMethod(.catmullRom).foregroundStyle(LinearGradient(colors: [.blue.opacity(0.2), .blue.opacity(0.0)], startPoint: .top, endPoint: .bottom))
+                            .interpolationMethod(.catmullRom)
+                            .foregroundStyle(LinearGradient(colors: [.blue.opacity(0.2), .blue.opacity(0.0)], startPoint: .top, endPoint: .bottom))
                         LineMark(x: .value("Date", item.date), y: .value("Weight", item.weight))
-                            .interpolationMethod(.catmullRom).foregroundStyle(.blue).symbol { Circle().fill(.blue).frame(width: 6, height: 6) }
+                            .interpolationMethod(.catmullRom).foregroundStyle(.blue)
+                            .symbol { Circle().fill(.blue).frame(width: 6, height: 6) }
                     }
                 }
                 .frame(height: 180).chartYScale(domain: lowerBound...upperBound).chartXScale(domain: .automatic(includesZero: false))
@@ -636,7 +649,6 @@ struct DashboardView: View {
     }
 }
 
-// MARK: - Customization Sheet
 struct CustomizationSheet: View {
     @Binding var layout: [DashboardCardConfig]
     var onSave: () -> Void
@@ -648,23 +660,39 @@ struct CustomizationSheet: View {
                 Section {
                     ForEach($layout.indices, id: \.self) { index in
                         Toggle(isOn: $layout[index].isVisible) {
-                            Text(layout[index].type.rawValue)
-                                .fontWeight(.medium)
+                            Text(layout[index].type.rawValue).fontWeight(.medium)
                         }
                     }
-                } header: {
-                    Text("Visible Cards")
-                } footer: {
-                    Text("Toggle which cards appear on your dashboard. Use the arrows on the cards themselves to reorder them.")
-                }
+                } header: { Text("Visible Cards") }
+                footer: { Text("Toggle which cards appear on your dashboard. Use the arrows on the cards themselves to reorder them.") }
             }
             .navigationTitle("Dashboard Layout")
             .toolbar {
-                Button("Done") {
-                    onSave()
-                    dismiss()
-                }
+                Button("Done") { onSave(); dismiss() }
             }
         }
+    }
+}
+
+struct WeeklyGoalEditSheet: View {
+    @Binding var goal: Int
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    // UPDATED: Limit range to 7 days
+                    Stepper("Goal: \(goal) days", value: $goal, in: 1...7)
+                } footer: {
+                    Text("Set your target for the number of days you want to work out each week.")
+                }
+            }
+            .navigationTitle("Weekly Goal")
+            .toolbar {
+                Button("Done") { dismiss() }
+            }
+        }
+        .presentationDetents([.height(200)])
     }
 }

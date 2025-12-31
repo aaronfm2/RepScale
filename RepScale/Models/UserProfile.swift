@@ -30,6 +30,7 @@ final class UserProfile {
     
     // MARK: - Workout Preferences (NEW)
     var trackedMuscles: String = "Chest,Back,Legs,Shoulders,Abs,Cardio,Biceps,Triceps"
+    var weeklyWorkoutGoal: Int = 3 // Default to 3 workouts per week
     
     init() {
         self.createdAt = Date()
