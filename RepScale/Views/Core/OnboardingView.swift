@@ -6,6 +6,7 @@ struct OnboardingView: View {
     
     // MARK: - Navigation State
     @State private var currentStep = 0
+    @FocusState private var isInputFocused: Bool
     
     // MARK: - Local Data Collection
     @State private var unitSystem: UnitSystem = .metric
@@ -53,10 +54,16 @@ struct OnboardingView: View {
         ZStack {
             appBackgroundColor.ignoresSafeArea()
             
-            VStack {
-                ProgressView(value: Double(currentStep), total: 4)
-                    .padding()
+            VStack(spacing: 0) {
+                // Top Progress Bar
+                if currentStep > 0 && currentStep < 4 {
+                    ProgressView(value: Double(currentStep), total: 4)
+                        .tint(.blue)
+                        .padding(.horizontal)
+                        .padding(.top, 10)
+                }
                 
+                // Content
                 TabView(selection: $currentStep) {
                     welcomeStep.tag(0)
                     biometricsStep.tag(1)
@@ -65,39 +72,70 @@ struct OnboardingView: View {
                     finalStep.tag(4)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .animation(.easeInOut, value: currentStep)
+                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: currentStep)
                 
-                HStack {
-                    if currentStep > 0 {
-                        Button("Back") {
-                            hideKeyboard()
-                            currentStep -= 1
+                // Bottom Navigation Bar
+                if currentStep < 4 {
+                    HStack {
+                        if currentStep > 0 {
+                            Button(action: {
+                                hideKeyboard()
+                                withAnimation { currentStep -= 1 }
+                            }) {
+                                Text("Back")
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
+                            }
+                        } else {
+                            Spacer()
                         }
-                        .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    if currentStep < 4 {
-                        Button("Next") {
+                        
+                        Spacer()
+                        
+                        Button(action: {
                             hideKeyboard()
                             withAnimation {
                                 if currentStep == 1 { estimateMaintenance() }
                                 currentStep += 1
                             }
+                        }) {
+                            HStack {
+                                Text(currentStep == 0 ? "Get Started" : "Next")
+                                Image(systemName: "arrow.right")
+                            }
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 24)
+                            .background(cannotMoveForward ? Color.gray : Color.blue)
+                            .clipShape(Capsule())
                         }
-                        .buttonStyle(.borderedProminent)
                         .disabled(cannotMoveForward)
-                    } else {
-                        Button("Get Started") {
-                            hideKeyboard()
-                            completeOnboarding()
-                        }
-                        .buttonStyle(.borderedProminent)
                     }
+                    .padding()
+                    .background(appBackgroundColor.opacity(0.9))
+                } else {
+                    // Final Step Button
+                    Button(action: {
+                        hideKeyboard()
+                        completeOnboarding()
+                    }) {
+                        Text("Start Your Journey")
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                    }
+                    .padding()
+                    .padding(.bottom, 20)
                 }
-                .padding()
             }
         }
         .preferredColorScheme(isDarkMode ? .dark : .light)
+        .onTapGesture { hideKeyboard() }
     }
     
     // MARK: - Validation
@@ -113,212 +151,456 @@ struct OnboardingView: View {
         return false
     }
     
-    // MARK: - Steps
-    
+    // MARK: - Step 0: Welcome
     var welcomeStep: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "figure.strengthtraining.traditional")
-                .font(.system(size: 80))
-                .foregroundColor(.blue)
-            Text("Welcome to RepScale")
-                .font(.largeTitle).bold()
-            Text("Let's set up your profile to personalize your calorie and workout tracking.")
-                .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-                .padding()
-        }
-    }
-    
-    var biometricsStep: some View {
-        Form {
-            Section(header: Text("Preferences")) {
-                Picker("Units", selection: $unitSystem) {
-                    ForEach(UnitSystem.allCases, id: \.self) { system in
-                        Text(system.rawValue).tag(system)
-                    }
-                }
-                .pickerStyle(.segmented)
-                
-            }
-            Section(header: Text("Biometrics")) {
-                Picker("Gender", selection: $gender) {
-                    ForEach(Gender.allCases, id: \.self) { g in
-                        Text(g.rawValue).tag(g)
-                    }
-                }
-                .pickerStyle(.segmented)
-                HStack {
-                    Text("Current Weight (\(unitLabel))")
-                    Spacer()
-                    TextField("Required", value: $currentWeight, format: .number)
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                }
-            }
-            Section(footer: Text("We use this to estimate your baseline metabolic rate.")) { }
-        }
-        .scrollContentBackground(.hidden)
-        .background(appBackgroundColor)
-    }
-    
-    var goalsStep: some View {
-        Form {
-            Section(header: Text("Select Goal")) {
-                Picker("Goal Type", selection: $goalType) {
-                    ForEach(GoalType.allCases, id: \.self) { type in
-                        Text(type.rawValue).tag(type)
-                    }
-                }
-                .pickerStyle(.segmented)
+        VStack(spacing: 30) {
+            Spacer()
+            
+            ZStack {
+                Circle()
+                    .fill(Color.blue.opacity(0.1))
+                    .frame(width: 200, height: 200)
+                Image(systemName: "figure.strengthtraining.traditional")
+                    .font(.system(size: 80))
+                    .foregroundColor(.blue)
             }
             
-            if goalType == .maintenance {
-                Section(header: Text("Maintenance Settings"), footer: Text("Weight fluctuations within this range (+/-) are considered normal maintenance.")) {
-                    HStack {
-                        Text("Tolerance (+/- \(unitLabel))")
-                        Spacer()
-                        TextField("2.0", value: Binding(
-                            get: { toDisplay(maintenanceTolerance) },
-                            set: { maintenanceTolerance = toKg($0) }
-                        ), format: .number)
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                    }
-                }
-            } else {
-                Section(header: Text("Target"), footer: validationFooter) {
-                    HStack {
-                        Text("Target Weight (\(unitLabel))")
-                        Spacer()
-                        TextField("Required", value: $targetWeight, format: .number)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                    }
-                }
+            VStack(spacing: 12) {
+                Text("Welcome to RepScale")
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .multilineTextAlignment(.center)
+                
+                Text("Your personal companion for tracking weight,\nworkouts, and calories.")
+                    .font(.body)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.secondary)
             }
+            .padding(.horizontal)
+            
+            Spacer()
         }
-        .scrollContentBackground(.hidden)
-        .background(appBackgroundColor)
     }
     
-    @ViewBuilder
-    var validationFooter: some View {
-        if let t = targetWeight, let c = currentWeight {
-            if goalType == .cutting && t >= c {
-                Text("Target weight must be lower than current weight for cutting.").foregroundColor(.red)
-            } else if goalType == .bulking && t <= c {
-                Text("Target weight must be higher than current weight for bulking.").foregroundColor(.red)
-            } else {
-                Text("Enter your desired target weight.")
+    // MARK: - Step 1: Biometrics
+    var biometricsStep: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                headerText(title: "Tell us about yourself", subtitle: "We use this to estimate your baseline metabolism.")
+                
+                // Units
+                HStack(spacing: 0) {
+                    ForEach(UnitSystem.allCases, id: \.self) { system in
+                        Button(action: { withAnimation { unitSystem = system } }) {
+                            Text(system.rawValue)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(unitSystem == system ? Color.blue : Color.clear)
+                                .foregroundColor(unitSystem == system ? .white : .primary)
+                                .contentShape(Rectangle()) // Make tappable
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .background(Color.gray.opacity(0.15))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal)
+                
+                // Gender
+                HStack(spacing: 16) {
+                    selectionCard(title: "Male", icon: "figure.stand", isSelected: gender == .male) {
+                        gender = .male
+                    }
+                    selectionCard(title: "Female", icon: "figure.stand.dress", isSelected: gender == .female) {
+                        gender = .female
+                    }
+                }
+                .padding(.horizontal)
+                
+                // Weight Input
+                VStack(spacing: 10) {
+                    Text("Current Weight")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        TextField("0", value: $currentWeight, format: .number)
+                            .keyboardType(.decimalPad)
+                            .font(.system(size: 60, weight: .bold, design: .rounded))
+                            .multilineTextAlignment(.center)
+                            .frame(width: 150)
+                            .focused($isInputFocused)
+                            .foregroundColor(.primary)
+                        
+                        Text(unitLabel)
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                    .background(RoundedRectangle(cornerRadius: 20).fill(Color.gray.opacity(0.1)))
+                }
+                
+                Spacer(minLength: 50)
             }
-        } else {
-            Text("Enter your desired target weight.")
+            .padding(.top)
+        }
+    }
+    
+    // MARK: - Step 2: Goals
+    var goalsStep: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                headerText(title: "What is your goal?", subtitle: "Select a path to focus your training and nutrition.")
+                
+                // Goal Type Cards
+                VStack(spacing: 12) {
+                    selectionRow(title: "Cutting", subtitle: "Lose fat & preserve muscle", icon: "arrow.down.right.circle.fill", color: .green, isSelected: goalType == .cutting) {
+                        goalType = .cutting
+                    }
+                    
+                    selectionRow(title: "Bulking", subtitle: "Build muscle & strength", icon: "arrow.up.right.circle.fill", color: .orange, isSelected: goalType == .bulking) {
+                        goalType = .bulking
+                    }
+                    
+                    selectionRow(title: "Maintenance", subtitle: "Maintain current physique", icon: "equal.circle.fill", color: .blue, isSelected: goalType == .maintenance) {
+                        goalType = .maintenance
+                    }
+                }
+                .padding(.horizontal)
+                
+                Divider().padding(.horizontal)
+                
+                if goalType == .maintenance {
+                    VStack(spacing: 10) {
+                        Text("Maintenance Tolerance (+/-)")
+                            .font(.headline).foregroundColor(.secondary)
+                        
+                        HStack(alignment: .firstTextBaseline) {
+                            TextField("2.0", value: Binding(
+                                get: { toDisplay(maintenanceTolerance) },
+                                set: { maintenanceTolerance = toKg($0) }
+                            ), format: .number)
+                            .keyboardType(.decimalPad)
+                            .font(.system(size: 40, weight: .bold, design: .rounded))
+                            .multilineTextAlignment(.center)
+                            .frame(width: 100)
+                            .focused($isInputFocused)
+                            
+                            Text(unitLabel)
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding()
+                        .background(RoundedRectangle(cornerRadius: 16).fill(Color.gray.opacity(0.1)))
+                        
+                        Text("Fluctuations within this range are considered normal.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                } else {
+                    // Target Weight Input
+                    VStack(spacing: 10) {
+                        Text("Target Weight")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        
+                        HStack(alignment: .firstTextBaseline, spacing: 5) {
+                            TextField("0", value: $targetWeight, format: .number)
+                                .keyboardType(.decimalPad)
+                                .font(.system(size: 60, weight: .bold, design: .rounded))
+                                .multilineTextAlignment(.center)
+                                .frame(width: 150)
+                                .focused($isInputFocused)
+                            
+                            Text(unitLabel)
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding()
+                        .background(RoundedRectangle(cornerRadius: 20).fill(Color.gray.opacity(0.1)))
+                        
+                        // Validation Text
+                        if let t = targetWeight, let c = currentWeight {
+                            if goalType == .cutting && t >= c {
+                                Label("Target must be lower than current", systemImage: "exclamationmark.triangle.fill")
+                                    .font(.caption).foregroundColor(.red)
+                            } else if goalType == .bulking && t <= c {
+                                Label("Target must be higher than current", systemImage: "exclamationmark.triangle.fill")
+                                    .font(.caption).foregroundColor(.red)
+                            }
+                        }
+                    }
+                }
+                
+                Spacer(minLength: 50)
+            }
+            .padding(.top)
         }
     }
 
+    // MARK: - Step 3: Strategy
     var strategyStep: some View {
-        Form {
-            Section(header: Text("Preferences")) {
-                Toggle("Enable Calorie Counting", isOn: $isCalorieCountingEnabled)
+        ScrollView {
+            VStack(spacing: 24) {
+                headerText(title: "Tracking Strategy", subtitle: "Choose how you want to achieve your goals.")
+                
+                // Toggle Card
+                VStack(spacing: 0) {
+                    Toggle(isOn: $isCalorieCountingEnabled) {
+                        VStack(alignment: .leading) {
+                            Text("Count Calories")
+                                .font(.headline)
+                            Text("Track daily intake targets")
+                                .font(.caption).foregroundColor(.secondary)
+                        }
+                    }
+                    .padding()
+                    
+                    if isCalorieCountingEnabled {
+                        Divider().padding(.leading)
+                        Toggle(isOn: $trackCaloriesBurned) {
+                            VStack(alignment: .leading) {
+                                Text("Track Calories Burned")
+                                    .font(.headline)
+                                Text("Adjust goal based on activity")
+                                    .font(.caption).foregroundColor(.secondary)
+                            }
+                        }
+                        .padding()
+                        
+                        Divider().padding(.leading)
+                        Toggle(isOn: $knowsDetails) {
+                            VStack(alignment: .leading) {
+                                Text("Manual Entry")
+                                    .font(.headline)
+                                Text("I know my specific macro targets")
+                                    .font(.caption).foregroundColor(.secondary)
+                            }
+                        }
+                        .padding()
+                    }
+                }
+                .background(Color.gray.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .padding(.horizontal)
                 
                 if isCalorieCountingEnabled {
-                    Toggle("Track Calories Burned?", isOn: $trackCaloriesBurned)
-                }
-            }
-            
-            if isCalorieCountingEnabled {
-                Section(header: Text("Strategy")) {
-                    Toggle("I already know my calorie targets", isOn: $knowsDetails)
-                }
-                
-                if knowsDetails {
-                    Section(header: Text("Enter Details")) {
-                        HStack {
-                            Text("Maintenance Calories")
-                            Spacer()
-                            TextField("kcal", text: $maintenanceInput)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
+                    if knowsDetails {
+                        VStack(spacing: 16) {
+                            Text("Enter your custom targets").font(.headline)
+                            
+                            HStack {
+                                inputField(title: "Maintenance", text: $maintenanceInput)
+                                inputField(title: "Daily Goal", text: $dailyGoalInput)
+                            }
+                            .padding(.horizontal)
                         }
-                        HStack {
-                            Text("Daily Calorie Target")
-                            Spacer()
-                            TextField("kcal", text: $dailyGoalInput)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
+                    } else {
+                        VStack(spacing: 16) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Goal Deadline").font(.headline)
+                                DatePicker("Achieve Goal By", selection: $targetDate, in: Date()..., displayedComponents: .date)
+                                    .datePickerStyle(.graphical)
+                                    .background(Color.gray.opacity(0.1))
+                                    .cornerRadius(12)
+                                    .onChange(of: targetDate) { _, _ in calculateGoalFromDate() }
+                                    .onChange(of: maintenanceInput) { _, _ in calculateGoalFromDate() }
+                            }
+                            .padding(.horizontal)
+                            
+                            // Summary Card
+                            VStack(spacing: 16) {
+                                Text("Recommended Plan")
+                                    .font(.headline)
+                                
+                                HStack(spacing: 30) {
+                                    VStack {
+                                        Text("Maintenance")
+                                            .font(.caption).foregroundColor(.secondary)
+                                        Text(maintenanceInput)
+                                            .font(.title2).bold()
+                                    }
+                                    
+                                    Image(systemName: "arrow.right")
+                                        .foregroundColor(.secondary)
+                                    
+                                    VStack {
+                                        Text("Daily Goal")
+                                            .font(.caption).foregroundColor(.secondary)
+                                        Text(dailyGoalInput)
+                                            .font(.title2).bold().foregroundColor(.blue)
+                                    }
+                                }
+                                
+                                if let goal = Int(dailyGoalInput), let maint = Int(maintenanceInput) {
+                                    let diff = goal - maint
+                                    Text(diff < 0 ? "\(abs(diff)) calorie deficit / day" : "+\(diff) calorie surplus / day")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(diff < 0 ? .green : .orange)
+                                        .padding(.vertical, 4)
+                                        .padding(.horizontal, 12)
+                                        .background((diff < 0 ? Color.green : Color.orange).opacity(0.1))
+                                        .clipShape(Capsule())
+                                }
+                            }
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(RoundedRectangle(cornerRadius: 16).stroke(Color.blue.opacity(0.3), lineWidth: 1))
+                            .padding(.horizontal)
+                            .onAppear { calculateGoalFromDate() }
                         }
                     }
                 } else {
-                    Section(header: Text("Timeframe")) {
-                        DatePicker("Achieve Goal By", selection: $targetDate, in: Date()..., displayedComponents: .date)
-                            .onChange(of: targetDate) { _, _ in calculateGoalFromDate() }
-                            .onChange(of: maintenanceInput) { _, _ in calculateGoalFromDate() }
-                    }
-                    
-                    Section(header: Text("Calculations")) {
-                        HStack {
-                            Text("Est. Maintenance")
-                            Text("Est. using your Gender & Weight.")
-                                .font(.caption).foregroundColor(.secondary)
-                            Spacer()
-                            TextField("kcal", text: $maintenanceInput)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
-                        }
-                        
-                        HStack {
-                            Text("Recommended Daily Goal")
-                            Spacer()
-                            Text("\(dailyGoalInput) kcal")
-                                .bold()
-                                .foregroundColor(.blue)
-                        }
-                        
-                        if let goal = Int(dailyGoalInput), let maint = Int(maintenanceInput) {
-                            let diff = goal - maint
-                            Text(diff < 0 ? "\(diff) deficit / day" : "+\(diff) surplus / day")
-                                .font(.caption)
-                                .foregroundColor(diff < 0 ? .green : .orange)
-                        }
-                    }
-                    .onAppear {
-                        calculateGoalFromDate()
-                    }
-                }
-            } else {
-                Section {
-                    Text("With calorie counting disabled, the app will focus on tracking your weight trends and workouts.")
+                    Text("We'll focus on tracking your workouts and weight trends instead.")
+                        .font(.subheadline)
                         .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding()
                 }
+                
+                Spacer(minLength: 50)
             }
+            .padding(.top)
         }
-        .scrollContentBackground(.hidden)
-        .background(appBackgroundColor)
     }
     
+    // MARK: - Step 4: Final
     var finalStep: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 80))
-                .foregroundColor(.green)
+        VStack(spacing: 30) {
+            Spacer()
             
-            Text("You're All Set!")
-                .font(.title).bold()
+            ZStack {
+                Circle()
+                    .fill(Color.green.opacity(0.1))
+                    .frame(width: 160, height: 160)
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 80))
+                    .foregroundColor(.green)
+                    .scaleEffect(1.0)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.5).delay(0.2), value: true)
+            }
             
-            Text("We've saved your starting weight and configured your profile.")
-                .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-                .padding()
+            VStack(spacing: 12) {
+                Text("You're All Set!")
+                    .font(.title).bold()
+                Text("We've saved your starting weight and configured your profile.")
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.secondary)
+            }
             
             if isCalorieCountingEnabled {
-                VStack(spacing: 10) {
-                    Text("Daily Goal: \(dailyGoalInput) kcal").bold()
-                    Text("Maintenance: \(maintenanceInput) kcal").foregroundColor(.secondary)
+                HStack(spacing: 40) {
+                    VStack {
+                        Text("\(dailyGoalInput)")
+                            .font(.title).bold()
+                        Text("Daily Goal")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                    VStack {
+                        Text("\(maintenanceInput)")
+                            .font(.title).bold()
+                        Text("Maintenance")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
                 }
                 .padding()
-                .background(isDarkMode ? Color.white.opacity(0.1) : Color.gray.opacity(0.1))
-                .cornerRadius(10)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(16)
             }
+            
+            Spacer()
+        }
+        .padding()
+    }
+    
+    // MARK: - UI Components
+    
+    private func headerText(title: String, subtitle: String) -> some View {
+        VStack(spacing: 8) {
+            Text(title)
+                .font(.title2)
+                .fontWeight(.bold)
+            Text(subtitle)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal)
+    }
+    
+    private func selectionCard(title: String, icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: { withAnimation { action() } }) {
+            VStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 32))
+                Text(title)
+                    .fontWeight(.medium)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+            .background(isSelected ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+            )
+            .cornerRadius(16)
+            .foregroundColor(isSelected ? .blue : .primary)
+            .contentShape(Rectangle()) // FIX: Makes the whole card clickable area
+        }
+        .buttonStyle(.plain) // FIX: Prevents style conflicts
+    }
+    
+    private func selectionRow(title: String, subtitle: String, icon: String, color: Color, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: { withAnimation { action() } }) {
+            HStack(spacing: 16) {
+                Image(systemName: icon)
+                    .font(.title)
+                    .foregroundColor(isSelected ? color : .gray)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(color)
+                }
+            }
+            .padding()
+            .background(isSelected ? color.opacity(0.1) : Color.gray.opacity(0.1))
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(isSelected ? color : Color.clear, lineWidth: 2)
+            )
+            .contentShape(Rectangle()) // FIX: Makes the empty space clickable
+        }
+        .buttonStyle(.plain) // FIX: Prevents style conflicts
+    }
+    
+    private func inputField(title: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            TextField("0", text: text)
+                .keyboardType(.numberPad)
+                .font(.title2).bold()
+                .padding()
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(10)
         }
     }
     
@@ -330,7 +612,6 @@ struct OnboardingView: View {
         let multiplier: Double = (gender == .male) ? 32.0 : 29.0
         let estimated = Int(weightKg * multiplier)
         maintenanceInput = String(estimated)
-        // If daily goal isn't set yet, default it to maintenance initially
         if dailyGoalInput.isEmpty {
             dailyGoalInput = String(estimated)
         }
@@ -343,13 +624,11 @@ struct OnboardingView: View {
         
         let currentKg = toKg(cWeight)
         
-        // Handle Maintenance Case
         if goalType == .maintenance {
             dailyGoalInput = String(maintenance)
             return
         }
         
-        // Handle Cutting/Bulking
         guard let tWeight = targetWeight else { return }
         let targetKg = toKg(tWeight)
         
@@ -373,7 +652,6 @@ struct OnboardingView: View {
     func completeOnboarding() {
         guard let finalCurrent = currentWeight else { return }
         
-        // 1. Resolve final target
         let finalTarget: Double
         if goalType == .maintenance {
             finalTarget = finalCurrent
@@ -381,15 +659,12 @@ struct OnboardingView: View {
             finalTarget = targetWeight ?? finalCurrent
         }
         
-        // 2. Normalize to storage units (Kg)
         let storedCurrentWeightKg = toKg(finalCurrent)
         let storedTargetWeightKg = toKg(finalTarget)
         
-        // 3. Resolve Calorie values
         let storedMaintenance = Int(maintenanceInput) ?? 2500
         let storedDailyGoal = Int(dailyGoalInput) ?? 2000
         
-        // 4. Create and Save UserProfile (This syncs to CloudKit)
         let profile = UserProfile()
         profile.unitSystem = unitSystem.rawValue
         profile.isDarkMode = isDarkMode
@@ -397,25 +672,24 @@ struct OnboardingView: View {
         
         profile.goalType = goalType.rawValue
         profile.targetWeight = storedTargetWeightKg
-        profile.maintenanceTolerance = maintenanceTolerance // Already in Kg
+        profile.maintenanceTolerance = maintenanceTolerance
         
         profile.isCalorieCountingEnabled = isCalorieCountingEnabled
         profile.enableCaloriesBurned = trackCaloriesBurned
         profile.dailyCalorieGoal = storedDailyGoal
         profile.maintenanceCalories = storedMaintenance
-        profile.estimationMethod = 0 // Default to simple
+        profile.estimationMethod = 0
         
         modelContext.insert(profile)
         
-        // --- ADDED: Seed Exercises NOW, since we know this is a new user ---
+        // Seed Exercises
         DefaultExercises.seed(context: modelContext)
-        // ------------------------------------------------------------------
         
-        // 5. Create First Weight Entry
+        // First Weight Entry
         let firstEntry = WeightEntry(date: Date(), weight: storedCurrentWeightKg, note: "")
         modelContext.insert(firstEntry)
                 
-        // 6. Start First Goal Period
+        // Start Goal Period
         dataManager.startNewGoalPeriod(
             goalType: goalType.rawValue,
             startWeight: storedCurrentWeightKg,
