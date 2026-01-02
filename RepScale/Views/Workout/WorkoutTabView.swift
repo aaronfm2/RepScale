@@ -40,7 +40,20 @@ struct WorkoutTabView: View {
                 .listRowInsets(EdgeInsets())
                 
                 // 2. Recovery Tracker & History
-                Section(header: Text("Recovery Tracker")) {
+                Section(header:
+                    HStack {
+                        Text("Recovery Tracker")
+                        Spacer()
+                        Button(action: { showingSettings = true }) {
+                            HStack(spacing: 4) {
+                                Text("Edit")
+                                Image(systemName: "slider.horizontal.3")
+                            }
+                            .font(.caption)
+                            .fontWeight(.medium)
+                        }
+                    }
+                ) {
                     if trackedMusclesList.isEmpty {
                         Text("Select muscles to track recovery time.")
                             .font(.caption).foregroundColor(.secondary)
@@ -54,35 +67,18 @@ struct WorkoutTabView: View {
                         .padding(.vertical, 5)
                         .listRowBackground(Color.clear)
                         
-                        // Settings Button
-                        Button(action: { showingSettings = true }) {
-                            HStack {
-                                Image(systemName: "slider.horizontal.3")
-                                Text("Select Tracked Muscles")
-                                Spacer()
-                                Image(systemName: "chevron.right").font(.caption)
-                            }
-                            .fontWeight(.medium)
-                            .foregroundColor(.primary)
-                            .padding()
-                            .background(cardBackgroundColor)
-                            .cornerRadius(12)
-                        }
-                        .padding(.top, 8)
-                        .buttonStyle(.plain)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets())
-                        
-                        // NEW: Workout History Button
+                        // Workout History Button
                         NavigationLink(destination: WorkoutHistoryView(profile: profile)) {
                             HStack {
                                 Image(systemName: "clock.arrow.circlepath")
+                                    .foregroundColor(.blue)
                                 Text("Workout History")
+                                    .fontWeight(.medium)
                                 Spacer()
-                                Image(systemName: "chevron.right").font(.caption)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(Color(uiColor: .tertiaryLabel))
                             }
-                            .fontWeight(.medium)
-                            .foregroundColor(.primary)
                             .padding()
                             .background(cardBackgroundColor)
                             .cornerRadius(12)
@@ -295,7 +291,6 @@ struct WorkoutCalendarView: View {
             // Grid
             let daysInMonth = calendarDays()
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
-                // Use indices to avoid ID collisions with nil or duplicate dates
                 ForEach(daysInMonth.indices, id: \.self) { index in
                     if let date = daysInMonth[index] {
                         let dailyWorkouts = workouts.filter({ Calendar.current.isDate($0.date, inSameDayAs: date) })
@@ -315,17 +310,14 @@ struct WorkoutCalendarView: View {
                                     .frame(width: 28, height: 28)
                                     .background(isToday ? Circle().fill(Color.blue) : Circle().fill(Color.clear))
                                 
-                                // Indicators
                                 HStack(spacing: 3) {
                                     if hasWorkout {
-                                        // Show up to 3 dots for multiple workouts
                                         ForEach(dailyWorkouts.prefix(3)) { w in
                                             Circle()
                                                 .fill(categoryColor(w.category))
                                                 .frame(width: 4, height: 4)
                                         }
                                     } else {
-                                        // Placeholder to keep height consistent
                                         Circle().fill(Color.clear).frame(width: 4, height: 4)
                                     }
                                 }
@@ -333,13 +325,12 @@ struct WorkoutCalendarView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 4)
                             .background(
-                                // Subtle highlight for workout days that aren't today
                                 hasWorkout && !isToday ? Color.blue.opacity(0.05) : Color.clear
                             )
                             .cornerRadius(8)
                         }
                         .buttonStyle(.plain)
-                        .disabled(!hasWorkout) // Only clickable if there is data
+                        .disabled(!hasWorkout)
 
                     } else {
                         Text("").frame(height: 40)
@@ -349,7 +340,6 @@ struct WorkoutCalendarView: View {
         }
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 16).fill(cardBackgroundColor))
-        // Navigation Handling
         .background(
             NavigationLink(
                 destination: destinationView,
@@ -425,29 +415,94 @@ struct DailyWorkoutListView: View {
     }
 }
 
+// UPDATED: MuscleSelectionView with Add Custom Muscle logic
 struct MuscleSelectionView: View {
     @Binding var selectedMusclesString: String
     @Environment(\.dismiss) var dismiss
     
+    // State for adding new muscles
+    @State private var newMuscleName: String = ""
+    
+    // Derived lists
+    var currentList: [String] {
+        selectedMusclesString.components(separatedBy: ",").filter { !$0.isEmpty }
+    }
+    
+    var customMuscles: [String] {
+        let standard = Set(MuscleGroup.allCases.map { $0.rawValue })
+        return currentList.filter { !standard.contains($0) }
+    }
+    
     var body: some View {
         NavigationStack {
             List {
-                ForEach(MuscleGroup.allCases, id: \.self) { muscle in
+                // Section 1: Add New Muscle
+                Section("Add Custom Muscle") {
                     HStack {
-                        Text(muscle.rawValue)
-                        Spacer()
-                        if selectedMusclesString.contains(muscle.rawValue) {
-                            Image(systemName: "checkmark").foregroundColor(.blue)
+                        TextField("Muscle Name (e.g. Forearms)", text: $newMuscleName)
+                            .textInputAutocapitalization(.words)
+                        Button(action: addMuscle) {
+                            Text("Add")
+                                .fontWeight(.bold)
+                        }
+                        .disabled(newMuscleName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+                
+                // Section 2: Standard Muscles (Enum)
+                Section("Standard Muscles") {
+                    ForEach(MuscleGroup.allCases, id: \.self) { muscle in
+                        HStack {
+                            Text(muscle.rawValue)
+                            Spacer()
+                            if selectedMusclesString.contains(muscle.rawValue) {
+                                Image(systemName: "checkmark").foregroundColor(.blue)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            toggleMuscle(muscle.rawValue)
                         }
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        toggleMuscle(muscle.rawValue)
+                }
+                
+                // Section 3: Custom Muscles (User added)
+                if !customMuscles.isEmpty {
+                    Section("Custom Muscles") {
+                        ForEach(customMuscles, id: \.self) { muscle in
+                            HStack {
+                                Text(muscle)
+                                Spacer()
+                                Image(systemName: "checkmark").foregroundColor(.blue)
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                // Toggling a custom muscle removes it (delete behavior)
+                                toggleMuscle(muscle)
+                            }
+                        }
                     }
                 }
             }
             .navigationTitle("Track Muscles")
             .toolbar { Button("Done") { dismiss() } }
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+            .scrollDismissesKeyboard(.interactively)
+        }
+    }
+    
+    
+    func addMuscle() {
+        let trimmed = newMuscleName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        
+        // Prevent duplicates
+        let current = selectedMusclesString.components(separatedBy: ",").filter { !$0.isEmpty }
+        if !current.contains(trimmed) {
+            var new = current
+            new.append(trimmed)
+            selectedMusclesString = new.joined(separator: ",")
+            newMuscleName = "" // Reset field
         }
     }
     
