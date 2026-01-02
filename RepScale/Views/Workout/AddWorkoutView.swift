@@ -27,6 +27,13 @@ struct AddWorkoutView: View {
                 addExerciseSection
                 RestTimerSection()
                 notesSection
+                
+                // --- FIX: Bottom Spacer for Keyboard ---
+                // Allows scrolling content above the keyboard since we ignore safe area
+                Section {
+                    Color.clear.frame(height: 400)
+                }
+                .listRowBackground(Color.clear)
             }
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .scrollDismissesKeyboard(.interactively)

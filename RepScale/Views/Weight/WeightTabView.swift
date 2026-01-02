@@ -192,7 +192,10 @@ struct WeightTrackerView: View {
                     .toolbar {
                         ToolbarItemGroup(placement: .keyboard) {
                             Spacer()
-                            Button("Done") { isInputFocused = false }
+                            // FIX: Using global resignFirstResponder ensures "Done" works for BOTH Weight and Notes
+                            Button("Done") {
+                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                            }
                         }
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Cancel") { showingAddWeight = false }
@@ -333,6 +336,13 @@ struct EditWeightView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                }
+                // FIX: Added Done button for Edit View as well
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
                 }
             }
         }
