@@ -55,14 +55,19 @@ struct LogDetailView: View {
                 }
                 
                 notesSection
+                
+                // --- FIX: Manual Spacer for Keyboard ---
+                // Since we ignore the keyboard safe area to prevent glitches,
+                // we add this space so you can scroll the note editor up high enough to see it.
+                Color.clear.frame(height: 400)
             }
             .padding(.bottom, 30)
         }
-        // --- FIX START: Prevents "Blank Screen" Glitch for Daily Notes ---
+        .background(appBackgroundColor)
+        // --- FIX START: Prevents "Blank Screen" Glitch ---
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .scrollDismissesKeyboard(.interactively)
         // --- FIX END ---
-        .background(appBackgroundColor)
         .navigationTitle("Daily Summary")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -81,6 +86,15 @@ struct LogDetailView: View {
                     }
                     .disabled(isSyncing)
                 }
+            }
+            
+            // --- FIX: Keyboard Done Button ---
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
+                .bold()
             }
         }
         .sheet(isPresented: $showingEditOverrides) {
@@ -386,10 +400,6 @@ struct EditOverridesSheet: View {
                 }
                 Section(footer: Text("Adjusting these values updates the Total instantly. HealthKit data remains the baseline.")) { }
             }
-            // --- FIX START: Prevents "Blank Screen" Glitch in Sheet ---
-            .ignoresSafeArea(.keyboard, edges: .bottom)
-            .scrollDismissesKeyboard(.interactively)
-            // --- FIX END ---
             .navigationTitle("Edit Manual Entries")
             .toolbar {
                 Button("Done") {

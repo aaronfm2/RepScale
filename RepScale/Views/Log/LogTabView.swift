@@ -38,6 +38,12 @@ struct LogTabView: View {
     @State private var carbsInput = ""
     @State private var fatInput = ""
 
+    // --- FOCUS STATE MANAGEMENT ---
+    enum LogField {
+        case calories, protein, carbs, fat
+    }
+    @FocusState private var focusedField: LogField?
+
     // MARK: - Computed Properties for Grouping
     struct LogSection: Identifiable {
         var id: Date { month }
@@ -256,6 +262,7 @@ struct LogTabView: View {
                             Text("Calories")
                             Spacer()
                             TextField("kcal", text: $caloriesInput)
+                                .focused($focusedField, equals: .calories)
                                 .keyboardType(.numberPad)
                                 .multilineTextAlignment(.trailing)
                         }
@@ -265,6 +272,7 @@ struct LogTabView: View {
                             Text("Protein (g)")
                             Spacer()
                             TextField("0", text: $proteinInput)
+                                .focused($focusedField, equals: .protein)
                                 .keyboardType(.numberPad)
                                 .multilineTextAlignment(.trailing)
                         }
@@ -272,6 +280,7 @@ struct LogTabView: View {
                             Text("Carbs (g)")
                             Spacer()
                             TextField("0", text: $carbsInput)
+                                .focused($focusedField, equals: .carbs)
                                 .keyboardType(.numberPad)
                                 .multilineTextAlignment(.trailing)
                         }
@@ -279,6 +288,7 @@ struct LogTabView: View {
                             Text("Fat (g)")
                             Spacer()
                             TextField("0", text: $fatInput)
+                                .focused($focusedField, equals: .fat)
                                 .keyboardType(.numberPad)
                                 .multilineTextAlignment(.trailing)
                         }
@@ -290,6 +300,16 @@ struct LogTabView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+                
+                // --- VISIBILITY FIX: Bottom Spacer ---
+                // Because we ignore safe area (to fix the blank screen glitch),
+                // we must manually add space so the bottom fields can be scrolled
+                // up above the keyboard.
+                Section {
+                    Color.clear
+                        .frame(height: 350)
+                }
+                .listRowBackground(Color.clear)
             }
             // --- FIX START: Prevents "Blank Screen" Glitch ---
             .ignoresSafeArea(.keyboard, edges: .bottom)
@@ -302,6 +322,15 @@ struct LogTabView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { saveLog() }
+                }
+                
+                // --- KEYBOARD TOOLBAR (Done Button Only) ---
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        focusedField = nil
+                    }
+                    .bold()
                 }
             }
         }
@@ -550,19 +579,19 @@ struct LogTabView: View {
                 
                 // Bottom Row: 30-Day Avg
                 if averageCalories30Days > 0 {
-                     HStack(spacing: 6) {
+                    HStack(spacing: 6) {
                         Image(systemName: "chart.bar.fill")
-                             .font(.caption2)
+                            .font(.caption2)
                             .foregroundColor(.purple)
                         Text("30-Day Average: \(averageCalories30Days) kcal")
                             .font(.caption)
                             .fontWeight(.medium)
                             .foregroundColor(.primary)
-                     }
-                     .padding(.vertical, 6)
-                     .padding(.horizontal, 10)
-                     .background(Color.purple.opacity(0.1))
-                     .cornerRadius(8)
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .background(Color.purple.opacity(0.1))
+                    .cornerRadius(8)
                 }
             }
             .padding(16)
