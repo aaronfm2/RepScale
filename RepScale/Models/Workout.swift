@@ -24,18 +24,22 @@ final class Workout {
 
 @Model
 final class ExerciseEntry {
+    // 1. Add a stable UUID property
+    var uuid: UUID = UUID()
+    
     var name: String = ""
     var reps: Int?
     var weight: Double?
     var note: String = ""
     
-    var duration: Double? // Minutes
-    var distance: Double? // Kilometers
+    var duration: Double?
+    var distance: Double?
     var isCardio: Bool = false
     
     var workout: Workout?
     
     init(name: String, reps: Int? = nil, weight: Double? = nil, duration: Double? = nil, distance: Double? = nil, isCardio: Bool = false, note: String = "") {
+        // uuid is initialized automatically
         self.name = name
         self.reps = reps
         self.weight = weight

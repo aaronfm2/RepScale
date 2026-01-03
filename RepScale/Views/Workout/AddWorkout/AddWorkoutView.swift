@@ -205,18 +205,17 @@ extension AddWorkoutView {
             } else {
                 ForEach(viewModel.groupedExercises, id: \.name) { group in
                     Section {
-                        ForEach(Array(group.exercises.enumerated()), id: \.element) { index, ex in
+                        ForEach(Array(group.exercises.enumerated()), id: \.element.uuid) { index, ex in
                             EditExerciseRow(
                                 exercise: ex,
                                 index: index,
                                 unitSystem: profile.unitSystem,
-                                // Pass the debounce trigger closure here
                                 onInputChanged: { inputChangeTrigger += 1 }
                             )
                             .swipeActions(edge: .leading) {
                                 Button {
                                     viewModel.duplicateExercise(ex)
-                                    performAutosave() // Save on duplicate
+                                    performAutosave()
                                 } label: {
                                     Label("Copy", systemImage: "plus.square.on.square")
                                 }
