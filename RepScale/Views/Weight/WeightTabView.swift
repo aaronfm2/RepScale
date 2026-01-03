@@ -72,6 +72,9 @@ struct WeightListContent: View {
     // Dynamic Query for main list
     @Query private var weights: [WeightEntry]
     
+    // Used to determine the absolute start date for syncing constraints
+    @Query(sort: \WeightEntry.date, order: .forward) private var allWeights: [WeightEntry]
+    
     // Periods (Usually small data set, can remain global or filtered. Keeping global for "Journey" accuracy)
     @Query(filter: #Predicate<GoalPeriod> { $0.endDate == nil }) private var activeGoalPeriods: [GoalPeriod]
     @Query(sort: \GoalPeriod.startDate, order: .reverse) private var allGoalPeriods: [GoalPeriod]
@@ -333,10 +336,23 @@ struct WeightListContent: View {
     private func fetchHealthKitWeight() {
         guard profile.enableHealthKitSync else { return }
         
+        // Retrieve the earliest existing weight entry to act as a cutoff
+        let earliestEntryDate = allWeights.first?.date
+        
         Task {
             // Fetch for the last 90 days
             for dayOffset in 0..<90 {
                 guard let date = Calendar.current.date(byAdding: .day, value: -dayOffset, to: Date()) else { continue }
+                
+                // If we have an existing history, do not sync data older than the very first entry
+                if let earliest = earliestEntryDate {
+                    let dateStart = Calendar.current.startOfDay(for: date)
+                    let earliestStart = Calendar.current.startOfDay(for: earliest)
+                    
+                    if dateStart < earliestStart {
+                        continue
+                    }
+                }
                 
                 let weight = await healthManager.fetchBodyMass(for: date)
                 
