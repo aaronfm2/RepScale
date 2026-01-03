@@ -117,7 +117,7 @@ struct WorkoutTabView: View {
                 // 3. Recent Workouts
                 Section(header: Text("Recent Workouts")) {
                     if workouts.isEmpty {
-                        Text("No workouts yet. Tap + to add.")
+                        Text("No workouts yet. Tap the top right + to add.")
                             .foregroundColor(.secondary)
                             .listRowBackground(cardBackgroundColor)
                     } else {
