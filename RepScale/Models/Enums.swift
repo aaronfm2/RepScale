@@ -93,6 +93,7 @@ enum DashboardCardType: String, CaseIterable, Codable, Identifiable {
     case strengthTracker = "Strength Tracker"
     case volumeTracker = "Volume Tracker"
     case nutrition = "Nutrition"
+    case macroDistribution = "Macro Distribution"
     
     var id: String { rawValue }
 }

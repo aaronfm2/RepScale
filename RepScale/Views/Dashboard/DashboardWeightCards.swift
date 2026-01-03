@@ -236,32 +236,3 @@ struct WeightTrendCard: View {
         }.padding().background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
     }
 }
-
-// Helper Reusable View
-struct ReorderArrows: View {
-    let index: Int
-    let totalCount: Int
-    let onUp: () -> Void
-    let onDown: () -> Void
-    
-    var body: some View {
-        HStack(spacing: 4) {
-            if index > 0 {
-                Button(action: onUp) {
-                    Image(systemName: "chevron.up")
-                        .font(.caption2).fontWeight(.bold).foregroundColor(.secondary)
-                        .padding(6).background(Color.secondary.opacity(0.1)).clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-            }
-            if index < totalCount - 1 {
-                Button(action: onDown) {
-                    Image(systemName: "chevron.down")
-                        .font(.caption2).fontWeight(.bold).foregroundColor(.secondary)
-                        .padding(6).background(Color.secondary.opacity(0.1)).clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}

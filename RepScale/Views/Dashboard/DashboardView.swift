@@ -160,6 +160,12 @@ struct DashboardView: View {
                 index: index, totalCount: totalCount,
                 onMoveUp: { moveCardUp(index) }, onMoveDown: { moveCardDown(index) }
             )
+        case .macroDistribution:
+                MacrosDistributionCard(
+                    profile: profile,
+                    index: index, totalCount: totalCount,
+                    onMoveUp: { moveCardUp(index) }, onMoveDown: { moveCardDown(index) }
+                )
         }
     }
     
@@ -444,7 +450,7 @@ struct CustomizationSheet: View {
     private func isClassified(_ type: DashboardCardType) -> Bool {
         switch type {
         case .projection, .weightChange, .weightTrend,
-                .workoutDistribution, .weeklyWorkoutGoal, .strengthTracker, .volumeTracker, .nutrition:
+                .workoutDistribution, .weeklyWorkoutGoal, .strengthTracker, .volumeTracker, .nutrition, .macroDistribution:
             return true
         }
     }
@@ -459,6 +465,36 @@ struct CustomizationSheet: View {
         case .strengthTracker: return "dumbbell.fill"
         case .volumeTracker: return "chart.bar.fill"
         case .nutrition: return "fork.knife"
+        case .macroDistribution: return "chart.pie.fill"
+        }
+    }
+}
+
+// Helper Reusable View
+struct ReorderArrows: View {
+    let index: Int
+    let totalCount: Int
+    let onUp: () -> Void
+    let onDown: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            if index > 0 {
+                Button(action: onUp) {
+                    Image(systemName: "chevron.up")
+                        .font(.caption2).fontWeight(.bold).foregroundColor(.secondary)
+                        .padding(6).background(Color.secondary.opacity(0.1)).clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+            }
+            if index < totalCount - 1 {
+                Button(action: onDown) {
+                    Image(systemName: "chevron.down")
+                        .font(.caption2).fontWeight(.bold).foregroundColor(.secondary)
+                        .padding(6).background(Color.secondary.opacity(0.1)).clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 }
