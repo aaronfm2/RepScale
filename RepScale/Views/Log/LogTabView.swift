@@ -5,16 +5,87 @@ struct LogTabView: View {
     // --- CLOUD SYNC: Injected Profile ---
     @Bindable var profile: UserProfile
     
+    // MARK: - Filter State
+    @State private var dateRange: DateRangeOption = .last30
+    @State private var customStartDate: Date = Calendar.current.date(byAdding: .year, value: -1, to: Date()) ?? Date()
+    @State private var customEndDate: Date = Date()
+    @State private var showCustomDateSheet = false
+    
+    enum DateRangeOption: String, CaseIterable, Identifiable {
+        case last30 = "Last 30 Days"
+        case last90 = "Last 90 Days"
+        case last365 = "Last 365 Days"
+        case custom = "Custom Range"
+        
+        var id: String { rawValue }
+    }
+    
+    var startDate: Date {
+        switch dateRange {
+        case .last30:
+            return Calendar.current.date(byAdding: .day, value: -30, to: Date())!
+        case .last90:
+            return Calendar.current.date(byAdding: .day, value: -90, to: Date())!
+        case .last365:
+            return Calendar.current.date(byAdding: .day, value: -365, to: Date())!
+        case .custom:
+            return customStartDate
+        }
+    }
+    
+    var endDate: Date {
+        switch dateRange {
+        case .custom: return customEndDate
+        default: return Date()
+        }
+    }
+
+    var body: some View {
+        // We defer the Query to a subview so it can be initialized with dynamic dates
+        LogListContent(
+            profile: profile,
+            startDate: startDate,
+            endDate: endDate,
+            dateRange: $dateRange,
+            showCustomDateSheet: $showCustomDateSheet
+        )
+        .sheet(isPresented: $showCustomDateSheet) {
+            NavigationStack {
+                Form {
+                    DatePicker("Start Date", selection: $customStartDate, displayedComponents: .date)
+                    DatePicker("End Date", selection: $customEndDate, displayedComponents: .date)
+                    
+                    Section {
+                        Text("For performance, please select a range of up to 365 days.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .navigationTitle("Custom Range")
+                .toolbar {
+                    Button("Done") { showCustomDateSheet = false }
+                }
+            }
+            .presentationDetents([.medium])
+        }
+    }
+}
+
+// MARK: - Subview with Dynamic Query
+struct LogListContent: View {
+    @Bindable var profile: UserProfile
+    var startDate: Date
+    var endDate: Date
+    @Binding var dateRange: LogTabView.DateRangeOption
+    @Binding var showCustomDateSheet: Bool
+    
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \DailyLog.date, order: .reverse) private var logs: [DailyLog]
-    
-    // Fetch workouts to link them to logs
-    @Query(sort: \Workout.date, order: .reverse) private var workouts: [Workout]
-    
-    // Fetch Weight Entries to find the starting date
-    @Query(sort: \WeightEntry.date, order: .forward) private var weightEntries: [WeightEntry]
-    
     @EnvironmentObject var healthManager: HealthManager
+    
+    // Dynamic Queries based on init params
+    @Query private var logs: [DailyLog]
+    @Query private var workouts: [Workout]
+    @Query private var weightEntries: [WeightEntry]
 
     // MARK: - Color Palette
     var appBackgroundColor: Color {
@@ -43,6 +114,33 @@ struct LogTabView: View {
         case calories, protein, carbs, fat
     }
     @FocusState private var focusedField: LogField?
+    
+    init(profile: UserProfile, startDate: Date, endDate: Date, dateRange: Binding<LogTabView.DateRangeOption>, showCustomDateSheet: Binding<Bool>) {
+        self.profile = profile
+        self.startDate = startDate
+        self.endDate = endDate
+        self._dateRange = dateRange
+        self._showCustomDateSheet = showCustomDateSheet
+        
+        // Construct Predicates
+        let start = Calendar.current.startOfDay(for: startDate)
+        let end = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: endDate) ?? endDate
+        
+        let logPredicate = #Predicate<DailyLog> {
+            $0.date >= start && $0.date <= end
+        }
+        _logs = Query(filter: logPredicate, sort: \DailyLog.date, order: .reverse)
+        
+        let workoutPredicate = #Predicate<Workout> {
+            $0.date >= start && $0.date <= end
+        }
+        _workouts = Query(filter: workoutPredicate, sort: \Workout.date, order: .reverse)
+        
+        let weightPredicate = #Predicate<WeightEntry> {
+            $0.date >= start && $0.date <= end
+        }
+        _weightEntries = Query(filter: weightPredicate, sort: \WeightEntry.date, order: .forward)
+    }
 
     // MARK: - Computed Properties for Grouping
     struct LogSection: Identifiable {
@@ -66,6 +164,7 @@ struct LogTabView: View {
         let today = calendar.startOfDay(for: Date())
         let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: today)!
         
+        // Filter from the already filtered `logs` array
         let recentLogs = logs.filter {
             $0.date >= thirtyDaysAgo &&
             $0.date < today &&
@@ -123,6 +222,20 @@ struct LogTabView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack {
+                        // Date Range Filter
+                        Menu {
+                            ForEach(LogTabView.DateRangeOption.allCases) { option in
+                                Button {
+                                    dateRange = option
+                                    if option == .custom { showCustomDateSheet = true }
+                                } label: {
+                                    Label(option.rawValue, systemImage: dateRange == option ? "checkmark" : "")
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                        }
+                        
                         if profile.enableHealthKitSync {
                             Button(action: refreshLast365Days) {
                                 if isRefreshingHistory {
@@ -187,13 +300,10 @@ struct LogTabView: View {
 
     // MARK: - Helper Methods
     
-    /// Checks for duplicate DailyLog entries for the same date and removes them.
-    /// Keeps the entry with the most manual data or the first one found.
     private func deduplicateLogs() {
         let grouped = Dictionary(grouping: logs) { Calendar.current.startOfDay(for: $0.date) }
         
         for (_, dayLogs) in grouped where dayLogs.count > 1 {
-            // Sort by data "richness" to decide which one to keep
             let sorted = dayLogs.sorted {
                 let s1 = abs($0.manualCalories) + abs($0.manualProtein)
                 let s2 = abs($1.manualCalories) + abs($1.manualProtein)
@@ -201,7 +311,6 @@ struct LogTabView: View {
             }
             
             if let keep = sorted.first {
-                print("Deduplicating logs for date \(keep.date). Keeping 1, deleting \(sorted.count - 1).")
                 for duplicate in sorted.dropFirst() {
                     modelContext.delete(duplicate)
                 }
@@ -209,7 +318,6 @@ struct LogTabView: View {
         }
     }
 
-    /// Fetches a log directly from the context to avoid stale Query results
     private func fetchLog(for date: Date) -> DailyLog? {
         let normalizedDate = Calendar.current.startOfDay(for: date)
         let descriptor = FetchDescriptor<DailyLog>(
@@ -221,6 +329,7 @@ struct LogTabView: View {
     private func refreshLast365Days() {
         guard profile.enableHealthKitSync else { return }
         isRefreshingHistory = true
+        // Only consider the loaded weight entries for the limit
         let firstWeightDate = weightEntries.first?.date
         
         Task {
@@ -245,8 +354,6 @@ struct LogTabView: View {
                 await MainActor.run {
                     let normalizedDate = Calendar.current.startOfDay(for: date)
                     
-                    // 1. Update Logs (Refined Logic with Direct Fetch)
-                    // Use a direct fetch to check for existence, bypassing potential @Query lag
                     let descriptor = FetchDescriptor<DailyLog>(predicate: #Predicate { $0.date == normalizedDate })
                     let existingLog = try? modelContext.fetch(descriptor).first
                     
@@ -267,8 +374,8 @@ struct LogTabView: View {
                         modelContext.insert(newLog)
                     }
                     
-                    // 2. Update Weight
                     if weight > 0 {
+                        // Check against loaded entries to avoid duplications in view
                         let hasWeightEntry = weightEntries.contains { Calendar.current.isDate($0.date, inSameDayAs: date) }
                         if !hasWeightEntry {
                             dataManager.addWeightEntry(date: date, weight: weight, goalType: profile.goalType)
@@ -278,7 +385,7 @@ struct LogTabView: View {
             }
             
             await MainActor.run {
-                deduplicateLogs() // Run cleanup after refresh
+                deduplicateLogs()
                 withAnimation { isRefreshingHistory = false }
             }
         }
@@ -393,7 +500,6 @@ struct LogTabView: View {
         }
         let latestWeight = dayWeights.sorted(by: { $0.date < $1.date }).last?.weight
         
-        // Use direct fetch instead of @Query array to ensure we find the log if it exists
         let existingLog = fetchLog(for: logDate)
         
         if let log = existingLog {
@@ -452,7 +558,7 @@ struct LogTabView: View {
     }
     
     private func setupOnAppear() {
-        deduplicateLogs() // Clean up any duplicates on appear
+        deduplicateLogs()
         
         if profile.enableHealthKitSync {
             healthManager.requestAuthorization()
@@ -485,7 +591,6 @@ struct LogTabView: View {
     private func updateTodayLog(update: (DailyLog) -> Void) {
         let todayDate = Calendar.current.startOfDay(for: Date())
         
-        // Use direct fetch to prevent creating a duplicate if @Query hasn't updated yet
         if let todayLog = fetchLog(for: todayDate) {
             update(todayLog)
         } else {

@@ -5,12 +5,74 @@ struct WeightTrackerView: View {
     // --- CLOUD SYNC: Injected Profile ---
     @Bindable var profile: UserProfile
     
+    // MARK: - Filter State
+    @State private var dateRange: LogTabView.DateRangeOption = .last30
+    @State private var customStartDate: Date = Calendar.current.date(byAdding: .year, value: -1, to: Date()) ?? Date()
+    @State private var customEndDate: Date = Date()
+    @State private var showCustomDateSheet = false
+    
+    // Reusing the enum from LogTabView for consistency
+    var startDate: Date {
+        switch dateRange {
+        case .last30: return Calendar.current.date(byAdding: .day, value: -30, to: Date())!
+        case .last90: return Calendar.current.date(byAdding: .day, value: -90, to: Date())!
+        case .last365: return Calendar.current.date(byAdding: .day, value: -365, to: Date())!
+        case .custom: return customStartDate
+        }
+    }
+    
+    var endDate: Date {
+        switch dateRange {
+        case .custom: return customEndDate
+        default: return Date()
+        }
+    }
+
+    var body: some View {
+        WeightListContent(
+            profile: profile,
+            startDate: startDate,
+            endDate: endDate,
+            dateRange: $dateRange,
+            showCustomDateSheet: $showCustomDateSheet
+        )
+        .sheet(isPresented: $showCustomDateSheet) {
+            NavigationStack {
+                Form {
+                    DatePicker("Start Date", selection: $customStartDate, displayedComponents: .date)
+                    DatePicker("End Date", selection: $customEndDate, displayedComponents: .date)
+                    
+                    Section {
+                        Text("For performance, please select a range of up to 365 days.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .navigationTitle("Custom Range")
+                .toolbar {
+                    Button("Done") { showCustomDateSheet = false }
+                }
+            }
+            .presentationDetents([.medium])
+        }
+    }
+}
+
+// MARK: - Subview with Dynamic Query
+struct WeightListContent: View {
+    @Bindable var profile: UserProfile
+    var startDate: Date
+    var endDate: Date
+    @Binding var dateRange: LogTabView.DateRangeOption
+    @Binding var showCustomDateSheet: Bool
+    
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var healthManager: HealthManager
     
-    @Query(sort: \WeightEntry.date, order: .reverse) private var weights: [WeightEntry]
+    // Dynamic Query for main list
+    @Query private var weights: [WeightEntry]
     
-    // We fetch all periods to determine streaks and phase history
+    // Periods (Usually small data set, can remain global or filtered. Keeping global for "Journey" accuracy)
     @Query(filter: #Predicate<GoalPeriod> { $0.endDate == nil }) private var activeGoalPeriods: [GoalPeriod]
     @Query(sort: \GoalPeriod.startDate, order: .reverse) private var allGoalPeriods: [GoalPeriod]
     
@@ -45,11 +107,28 @@ struct WeightTrackerView: View {
     private var startWeightForCurrentPeriod: Double {
         activeGoalPeriods.first?.startWeight ?? weights.last?.weight ?? weights.first?.weight ?? 70.0
     }
+    
+    init(profile: UserProfile, startDate: Date, endDate: Date, dateRange: Binding<LogTabView.DateRangeOption>, showCustomDateSheet: Binding<Bool>) {
+        self.profile = profile
+        self.startDate = startDate
+        self.endDate = endDate
+        self._dateRange = dateRange
+        self._showCustomDateSheet = showCustomDateSheet
+        
+        let start = Calendar.current.startOfDay(for: startDate)
+        let end = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: endDate) ?? endDate
+        
+        let predicate = #Predicate<WeightEntry> {
+            $0.date >= start && $0.date <= end
+        }
+        _weights = Query(filter: predicate, sort: \WeightEntry.date, order: .reverse)
+    }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 // MARK: - Header Section
+                // Only show header if we have data in range
                 if let current = weights.first {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
@@ -146,15 +225,31 @@ struct WeightTrackerView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        selectedDate = Date()
-                        newWeight = ""
-                        newNote = ""
-                        showingAddWeight = true
-                    }) {
-                        Image(systemName: "plus.circle.fill").font(.title2)
+                    HStack {
+                        // Date Range Filter
+                        Menu {
+                            ForEach(LogTabView.DateRangeOption.allCases) { option in
+                                Button {
+                                    dateRange = option
+                                    if option == .custom { showCustomDateSheet = true }
+                                } label: {
+                                    Label(option.rawValue, systemImage: dateRange == option ? "checkmark" : "")
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                        }
+                        
+                        Button(action: {
+                            selectedDate = Date()
+                            newWeight = ""
+                            newNote = ""
+                            showingAddWeight = true
+                        }) {
+                            Image(systemName: "plus.circle.fill").font(.title2)
+                        }
+                        .spotlightTarget(.addWeight)
                     }
-                    .spotlightTarget(.addWeight)
                 }
             }
             .sheet(isPresented: $showingAddWeight) {
@@ -186,15 +281,12 @@ struct WeightTrackerView: View {
                                 .disabled(newWeight.isEmpty)
                         }
                     }
-                    // --- FIX START: Prevents "Blank Screen" Glitch ---
                     .ignoresSafeArea(.keyboard, edges: .bottom)
                     .scrollDismissesKeyboard(.interactively)
-                    // --- FIX END ---
                     .navigationTitle("Log Weight")
                     .toolbar {
                         ToolbarItemGroup(placement: .keyboard) {
                             Spacer()
-                            // FIX: Using global resignFirstResponder ensures "Done" works for BOTH Weight and Notes
                             Button("Done") {
                                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                             }
@@ -246,14 +338,11 @@ struct WeightTrackerView: View {
                 
                 let weight = await healthManager.fetchBodyMass(for: date)
                 
-                // If we found a weight and it's valid (> 0)
                 if weight > 0 {
                     await MainActor.run {
-                        // Check if we already have a weight entry for this specific date
                         let targetDate = Calendar.current.startOfDay(for: date)
                         let hasEntry = weights.contains { Calendar.current.isDate($0.date, inSameDayAs: targetDate) }
                         
-                        // Only add if no entry exists to prevent overwriting manual edits
                         if !hasEntry {
                             dataManager.addWeightEntry(date: date, weight: weight, goalType: profile.goalType)
                         }
@@ -360,16 +449,13 @@ struct EditWeightView: View {
                     .frame(maxWidth: .infinity)
                 }
             }
-            // --- FIX START: Prevents "Blank Screen" Glitch ---
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .scrollDismissesKeyboard(.interactively)
-            // --- FIX END ---
             .navigationTitle("Edit Entry")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
-                // FIX: Added Done button for Edit View as well
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("Done") {
