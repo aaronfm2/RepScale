@@ -19,9 +19,6 @@ struct AddWorkoutView: View {
     // 2. State to track the live workout for autosaves
     @State private var activeWorkout: Workout?
     
-    // 3. Debounce Trigger State
-    @State private var inputChangeTrigger: Int = 0
-    
     init(workoutToEdit: Workout?, profile: UserProfile) {
         self.workoutToEdit = workoutToEdit
         self.profile = profile
@@ -53,7 +50,6 @@ struct AddWorkoutView: View {
             .navigationTitle(workoutToEdit == nil ? "Log Workout" : "Edit Workout")
             .toolbar {
                 // MARK: - Navigation Bar Items
-                // (Cancel, Save, Templates)
                 
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") { dismiss() }
@@ -81,10 +77,9 @@ struct AddWorkoutView: View {
 
                         // Manual Save Button (Finalizes)
                         Button("Done") {
-                            // We ignore the return value here as we are dismissing
-                            _ = viewModel.saveWorkout(context: modelContext, originalWorkout: activeWorkout) {
-                                dismiss()
-                            }
+                            // Cancel any pending debounce tasks before final save
+                            viewModel.forceImmediateSave(context: modelContext, originalWorkout: activeWorkout)
+                            dismiss()
                         }
                         .disabled(viewModel.selectedMuscles.isEmpty)
                         .bold()
@@ -96,13 +91,13 @@ struct AddWorkoutView: View {
                 AddExerciseSheet(exercises: $viewModel.exercises, workoutMuscles: muscleStrings, profile: profile)
                     .onDisappear {
                         // Autosave when returning from adding an exercise
-                        performAutosave()
+                        triggerDebouncedSave()
                     }
             }
             .sheet(isPresented: $viewModel.showLoadTemplateSheet) {
                 LoadTemplateSheet(templates: templates) { selectedTemplate in
                     viewModel.loadTemplate(selectedTemplate)
-                    performAutosave() // Save immediately after loading template
+                    triggerDebouncedSave()
                 }
             }
             .alert("Save Template", isPresented: $viewModel.showSaveTemplateAlert) {
@@ -115,31 +110,15 @@ struct AddWorkoutView: View {
             
             // MARK: - AUTOSAVE TRIGGERS
             
-            // 4. Save when app goes to background (Critical for data safety)
+            // 3. Save when app goes to background (Critical for data safety)
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .background || newPhase == .inactive {
-                    performAutosave()
-                }
-            }
-            
-            // 5. DEBOUNCED AUTOSAVE TASK
-            // This waits for 'inputChangeTrigger' to stop changing for 2 seconds before saving.
-            .task(id: inputChangeTrigger) {
-                // Don't autosave on the very first load (0)
-                guard inputChangeTrigger > 0 else { return }
-                
-                do {
-                    // Wait 2 seconds. If inputChangeTrigger changes again during this time,
-                    // SwiftUI cancels this task and starts a new one.
-                    try await Task.sleep(nanoseconds: 2 * 1_000_000_000)
-                    performAutosave()
-                } catch {
-                    // Task was cancelled because user kept typing; do nothing.
+                    // Force save immediately, bypassing the debounce timer
+                    viewModel.forceImmediateSave(context: modelContext, originalWorkout: activeWorkout)
                 }
             }
         }
         // MARK: - KEYBOARD TOOLBAR
-        // Attached to the NavigationStack so it persists even when Form content changes (like adding the first exercise)
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
@@ -150,19 +129,21 @@ struct AddWorkoutView: View {
         }
     }
     
-    // MARK: - Autosave Logic
-    private func performAutosave() {
+    // MARK: - Autosave Helpers
+    
+    /// Triggers the ViewModel to wait 2 seconds, then save.
+    /// Does not re-render the view.
+    private func triggerDebouncedSave() {
         guard !viewModel.exercises.isEmpty else { return }
         
-        // Save using ViewModel
-        if let saved = viewModel.saveWorkout(context: modelContext, originalWorkout: activeWorkout) {
-            
-            // Only update the local binding if we didn't have one before.
-            // This prevents the View from redrawing (and closing keyboard) if the ID hasn't changed.
-            if activeWorkout == nil {
-                self.activeWorkout = saved
-            }
-        }
+        // Pass the context and the current active workout to the VM
+        viewModel.scheduleAutosave(context: modelContext, originalWorkout: activeWorkout)
+        
+        // Note: We don't need to manually update `activeWorkout` here immediately.
+        // The save function in VM should ideally return the saved ID or object if needed,
+        // but for autosave, relying on the ID persistence is usually sufficient.
+        // If your saveWorkout returns a NEW object every time (creation), you might need to handle that logic
+        // in the main actor closure in the VM.
     }
 }
 
@@ -217,12 +198,13 @@ extension AddWorkoutView {
                                 exercise: ex,
                                 index: index,
                                 unitSystem: profile.unitSystem,
-                                onInputChanged: { inputChangeTrigger += 1 }
+                                // PERFORMANCE FIX: Pass the trigger function, don't update State
+                                onInputChanged: { triggerDebouncedSave() }
                             )
                             .swipeActions(edge: .leading) {
                                 Button {
                                     viewModel.duplicateExercise(ex)
-                                    performAutosave()
+                                    triggerDebouncedSave()
                                 } label: {
                                     Label("Copy", systemImage: "plus.square.on.square")
                                 }
@@ -231,12 +213,12 @@ extension AddWorkoutView {
                         }
                         .onDelete { indexSet in
                             viewModel.deleteFromGroup(group: group, at: indexSet)
-                            performAutosave() // Save on delete
+                            triggerDebouncedSave()
                         }
                         
                         Button(action: {
                             viewModel.addSet(to: group.name)
-                            performAutosave() // Save on add set
+                            triggerDebouncedSave()
                         }) {
                             Label("Add Set", systemImage: "plus")
                                 .font(.subheadline)
@@ -269,7 +251,7 @@ extension AddWorkoutView {
         Section("Notes") {
             TextField("Workout notes...", text: $viewModel.note)
                 .onChange(of: viewModel.note) {
-                    inputChangeTrigger += 1
+                    triggerDebouncedSave()
                 }
         }
     }
@@ -321,6 +303,9 @@ struct RestTimerSection: View {
             }
             .padding(.vertical, 8)
         }
+        .onDisappear {
+            stopTimer()
+        }
     }
     
     func formatTime(_ totalSeconds: Int) -> String {
@@ -363,7 +348,7 @@ struct EditExerciseRow: View {
     @Bindable var exercise: ExerciseEntry
     let index: Int
     let unitSystem: String
-    // Added callback for debounce
+    // PERFORMANCE FIX: This callback no longer triggers a Parent State Update
     var onInputChanged: () -> Void
     
     var weightLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }

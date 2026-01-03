@@ -39,6 +39,12 @@ class AddWorkoutViewModel {
         var exercises: [ExerciseEntry]
     }
     
+    // MARK: - Performance / Autosave Logic
+    
+    /// Tracks the pending autosave task to allow for debouncing (cancelling previous rapid inputs).
+    /// Ignored by Observation so changes to this don't trigger View updates.
+    @ObservationIgnored private var autosaveTask: Task<Void, Error>?
+
     // MARK: - Initializer
     init(workoutToEdit: Workout? = nil) {
         if let workout = workoutToEdit {
@@ -47,9 +53,7 @@ class AddWorkoutViewModel {
             self.selectedMuscles = Set(workout.muscleGroups)
             self.note = workout.note
             
-            // --- CRITICAL FIX HERE ---
-            // OLD CODE: self.exercises = workout.exercises ?? []
-            // NEW CODE: We map them to create *new* unmanaged objects.
+            // Map exercises to create new unmanaged objects (detached from context for editing)
             self.exercises = (workout.exercises ?? []).map { ex in
                 ExerciseEntry(
                     name: ex.name,
@@ -74,7 +78,11 @@ class AddWorkoutViewModel {
             if let index = groups.firstIndex(where: { $0.name == exercise.name }) {
                 groups[index].exercises.append(exercise)
             } else {
+                // --- FIX STARTS HERE ---
+                // We append a NEW group to the 'groups' array.
+                // We do NOT use 'index' here because it is out of scope.
                 groups.append(ExerciseGroup(name: exercise.name, exercises: [exercise]))
+                // --- FIX ENDS HERE ---
             }
         }
         return groups
@@ -181,9 +189,42 @@ class AddWorkoutViewModel {
         showSaveTemplateAlert = false
     }
     
+    // MARK: - Autosave Scheduling
+    
+    /// Schedules a save to happen after 3 seconds. If called again within that window,
+    /// the previous timer is cancelled. This prevents the UI from stuttering on every keystroke.
+    func scheduleAutosave(context: ModelContext, originalWorkout: Workout?) {
+        // 1. Cancel existing task
+        autosaveTask?.cancel()
+        
+        // 2. Start new task
+        autosaveTask = Task {
+            // Wait 2 seconds
+            try await Task.sleep(nanoseconds: 3 * 1_000_000_000)
+            
+            // Ensure task wasn't cancelled during the wait
+            try Task.checkCancellation()
+            
+            // Perform save on Main Actor
+            await MainActor.run {
+                _ = self.saveWorkout(context: context, originalWorkout: originalWorkout)
+                print("Autosave triggered via Debounce")
+            }
+        }
+    }
+    
+    /// Bypasses the debounce timer and saves immediately.
+    /// Used when the user taps "Done" or the app goes to the background.
+    func forceImmediateSave(context: ModelContext, originalWorkout: Workout?) {
+        autosaveTask?.cancel()
+        _ = saveWorkout(context: context, originalWorkout: originalWorkout)
+    }
+
+    // MARK: - Core Save Function
+    
     func saveWorkout(context: ModelContext, originalWorkout: Workout?, onComplete: (() -> Void)? = nil) -> Workout? {
         
-        // FIX: Filter out empty exercises to prevent saving workouts with no actual data.
+        // Filter out empty exercises to prevent saving workouts with no actual data.
         // Strength: Requires > 0 reps. Cardio: Requires > 0 distance or duration.
         let validExercises = exercises.filter { ex in
             if ex.isCardio {

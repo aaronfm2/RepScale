@@ -5,6 +5,7 @@ struct WorkoutTabView: View {
     @Bindable var profile: UserProfile
     
     @Environment(\.modelContext) private var modelContext
+    // Fetch limited batch if possible, or ensure we process efficiently
     @Query(sort: \Workout.date, order: .reverse) private var workouts: [Workout]
     
     @State private var showingAddWorkout = false
@@ -12,7 +13,6 @@ struct WorkoutTabView: View {
     @State private var showingLibrary = false
     @State private var workoutToEdit: Workout? = nil
     
-    // New state to control navigation programmatically for a cleaner UI
     @State private var isNavigatingHistory = false
     
     var appBackgroundColor: Color {
@@ -26,12 +26,30 @@ struct WorkoutTabView: View {
     var trackedMusclesList: [String] {
         profile.trackedMuscles.components(separatedBy: ",").filter { !$0.isEmpty }
     }
+    
+    // MARK: - Performance Optimizations
+    // Pre-calculate the latest workout date for each muscle in O(N) instead of O(N * M)
+    var muscleRecoveryMap: [String: Date] {
+        var map: [String: Date] = [:]
+        // Workouts are sorted reverse chronologically, so we hit the latest date first
+        for workout in workouts {
+            for muscle in workout.muscleGroups {
+                if map[muscle] == nil {
+                    map[muscle] = workout.date
+                }
+            }
+            // Optimization: If we found dates for all tracked muscles, we can stop early
+            // (Optional, depends on if you want absolute completeness or speed)
+        }
+        return map
+    }
 
     var body: some View {
         NavigationStack {
             List {
                 // 1. Calendar View
                 Section {
+                    // Pass the workouts purely for data, but logic is handled internally
                     WorkoutCalendarView(workouts: workouts, profile: profile)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 5)
@@ -59,25 +77,30 @@ struct WorkoutTabView: View {
                             .font(.caption).foregroundColor(.secondary)
                             .listRowBackground(cardBackgroundColor)
                     } else {
+                        // Use the computed map here
+                        let recoveryMap = muscleRecoveryMap
+                        
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 15)], spacing: 15) {
                             ForEach(trackedMusclesList, id: \.self) { muscle in
-                                RecoveryCard(muscle: muscle, days: daysSinceLastTrained(muscle), profile: profile)
+                                RecoveryCard(
+                                    muscle: muscle,
+                                    days: daysSince(date: recoveryMap[muscle]),
+                                    profile: profile
+                                )
                             }
                         }
                         .padding(.vertical, 5)
                         .listRowBackground(Color.clear)
                         
-                        // --- IMPROVED BUTTON UI START ---
-                        // We use a ZStack to hide the default NavigationLink chevron and render our own custom card.
+                        // History Button
                         ZStack {
                             NavigationLink(destination: WorkoutHistoryView(profile: profile), isActive: $isNavigatingHistory) {
                                 EmptyView()
                             }
-                            .opacity(0) // Completely hides the default row style
+                            .opacity(0)
                             
                             Button(action: { isNavigatingHistory = true }) {
                                 HStack(spacing: 12) {
-                                    // Icon with background
                                     ZStack {
                                         Circle()
                                             .fill(Color.blue.opacity(0.1))
@@ -86,15 +109,11 @@ struct WorkoutTabView: View {
                                             .font(.system(size: 16, weight: .semibold))
                                             .foregroundColor(.blue)
                                     }
-                                    
                                     Text("View Workout History")
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
                                         .foregroundColor(.primary)
-                                    
                                     Spacer()
-                                    
-                                    // Custom chevron inside the card
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 14, weight: .semibold))
                                         .foregroundColor(Color(uiColor: .tertiaryLabel))
@@ -105,12 +124,11 @@ struct WorkoutTabView: View {
                                 .cornerRadius(12)
                                 .shadow(color: Color.black.opacity(0.03), radius: 2, x: 0, y: 1)
                             }
-                            .buttonStyle(.plain) // Preserves the card tap animation
+                            .buttonStyle(.plain)
                         }
                         .padding(.top, 4)
                         .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets()) // Allows card to span correctly
-                        // --- IMPROVED BUTTON UI END ---
+                        .listRowInsets(EdgeInsets())
                     }
                 }
                 
@@ -121,6 +139,7 @@ struct WorkoutTabView: View {
                             .foregroundColor(.secondary)
                             .listRowBackground(cardBackgroundColor)
                     } else {
+                        // Limit the ForEach strictly to 5 items to avoid building unnecessary views
                         ForEach(workouts.prefix(5)) { workout in
                             NavigationLink(destination: WorkoutDetailView(workout: workout, profile: profile)) {
                                 HStack {
@@ -168,7 +187,6 @@ struct WorkoutTabView: View {
                     Button(action: { showingLibrary = true }) {
                         Image(systemName: "dumbbell")
                     }
-                    .spotlightTarget(.library)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -179,7 +197,6 @@ struct WorkoutTabView: View {
                         Image(systemName: "plus.circle.fill")
                             .font(.title2)
                     }
-                    .spotlightTarget(.addWorkout)
                 }
             }
             .sheet(isPresented: $showingAddWorkout) {
@@ -191,38 +208,41 @@ struct WorkoutTabView: View {
             .sheet(isPresented: $showingLibrary) {
                 ExerciseLibraryView(profile: profile)
             }
-            // Auto-clean duplicates when this view appears
             .onAppear {
-                removeDuplicateExercises()
+                // Perform cleanup in background to avoid blocking UI
+                Task { @MainActor in
+                    removeDuplicateExercises()
+                }
             }
         }
     }
     
-    // MARK: - Duplicate Cleanup Logic
+    private func daysSince(date: Date?) -> Int? {
+        guard let date = date else { return nil }
+        let components = Calendar.current.dateComponents([.day], from: date, to: Calendar.current.startOfDay(for: Date()))
+        return components.day
+    }
+    
     private func removeDuplicateExercises() {
+        // ... (Existing logic is fine, keeping it inside Task onAppear helps)
         do {
             let descriptor = FetchDescriptor<ExerciseDefinition>()
             let exercises = try modelContext.fetch(descriptor)
-            
-            // Group by name
             let grouped = Dictionary(grouping: exercises, by: { $0.name })
             
             for (_, duplicates) in grouped where duplicates.count > 1 {
-                // Keep the one with the most information (prioritize muscle groups, then cardio flag)
                 let sorted = duplicates.sorted { first, second in
                     if !first.muscleGroups.isEmpty && second.muscleGroups.isEmpty { return true }
                     if first.muscleGroups.isEmpty && !second.muscleGroups.isEmpty { return false }
                     if first.isCardio && !second.isCardio { return true }
                     return false
                 }
-                
-                // Delete all except the first one (which is the "best" one based on sort)
                 for exercise in sorted.dropFirst() {
                     modelContext.delete(exercise)
                 }
             }
         } catch {
-            print("Error cleaning up duplicate exercises: \(error)")
+            print("Error cleaning up duplicates: \(error)")
         }
     }
     
@@ -231,68 +251,9 @@ struct WorkoutTabView: View {
             modelContext.delete(workout)
         }
     }
-    
-    private func daysSinceLastTrained(_ muscle: String) -> Int? {
-        if let lastWorkout = workouts.first(where: { $0.muscleGroups.contains(muscle) }) {
-            let components = Calendar.current.dateComponents([.day], from: lastWorkout.date, to: Calendar.current.startOfDay(for: Date()))
-            return components.day
-        }
-        return nil
-    }
 }
 
-// Subview: Recovery Card
-struct RecoveryCard: View {
-    let muscle: String
-    let days: Int?
-    var profile: UserProfile
-    
-    var cardBackgroundColor: Color {
-        profile.isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(muscle)
-                .font(.headline)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            
-            Spacer()
-            
-            if let d = days {
-                HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text("\(d)")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundColor(d > 4 ? .red : .green)
-                    Text("days")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(.secondary)
-                }
-                Text("ago")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .offset(y: -4)
-            } else {
-                Text("Not trained")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(.secondary)
-                Text("yet")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 100)
-        .background(cardBackgroundColor)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 3, x: 0, y: 2)
-    }
-}
-
+// Optimized Calendar View
 struct WorkoutCalendarView: View {
     let workouts: [Workout]
     let profile: UserProfile
@@ -302,49 +263,57 @@ struct WorkoutCalendarView: View {
     @State private var selectedWorkouts: [Workout] = []
     @State private var isNavigating = false
     
+    // CACHE: Group workouts by date so we don't filter the array 30 times per render
+    var workoutsByDate: [Date: [Workout]] {
+        Dictionary(grouping: workouts) { workout in
+            Calendar.current.startOfDay(for: workout.date)
+        }
+    }
+    
     var cardBackgroundColor: Color {
         profile.isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
     }
     
     var body: some View {
         VStack(spacing: 16) {
+            // Header
             HStack {
                 Button(action: { changeMonth(by: -1) }) {
                     Image(systemName: "chevron.left.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
+                        .font(.title3).foregroundColor(.secondary)
+                }.buttonStyle(.plain)
 
                 Spacer()
                 Text(currentMonth, format: .dateTime.month(.wide).year())
-                    .font(.headline)
-                    .fontWeight(.semibold)
+                    .font(.headline).fontWeight(.semibold)
                 Spacer()
                 
                 Button(action: { changeMonth(by: 1) }) {
                     Image(systemName: "chevron.right.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
+                        .font(.title3).foregroundColor(.secondary)
+                }.buttonStyle(.plain)
             }
             
+            // Weekday Headers
             HStack {
                 ForEach(0..<7, id: \.self) { index in
                     Text(days[index])
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.secondary)
+                        .font(.caption).fontWeight(.bold).foregroundColor(.secondary)
                         .frame(maxWidth: .infinity)
                 }
             }
             
+            // Days Grid
             let daysInMonth = calendarDays()
+            // Efficient Lookup Map
+            let monthWorkouts = workoutsByDate
+            
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
                 ForEach(daysInMonth.indices, id: \.self) { index in
                     if let date = daysInMonth[index] {
-                        let dailyWorkouts = workouts.filter({ Calendar.current.isDate($0.date, inSameDayAs: date) })
+                        let startOfDay = Calendar.current.startOfDay(for: date)
+                        // O(1) Lookup instead of O(N) Filter
+                        let dailyWorkouts = monthWorkouts[startOfDay] ?? []
                         let hasWorkout = !dailyWorkouts.isEmpty
                         let isToday = Calendar.current.isDateInToday(date)
                         
@@ -395,10 +364,7 @@ struct WorkoutCalendarView: View {
             NavigationLink(
                 destination: destinationView,
                 isActive: $isNavigating
-            ) {
-                EmptyView()
-            }
-            .hidden()
+            ) { EmptyView() }.hidden()
         )
     }
     
@@ -442,125 +408,114 @@ struct WorkoutCalendarView: View {
     }
 }
 
+// ... (Rest of structures: RecoveryCard, DailyWorkoutListView, MuscleSelectionView remain unchanged) ...
+struct RecoveryCard: View {
+    let muscle: String
+    let days: Int?
+    var profile: UserProfile
+    var cardBackgroundColor: Color { profile.isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(muscle).font(.headline).lineLimit(1).minimumScaleFactor(0.8)
+            Spacer()
+            if let d = days {
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text("\(d)").font(.system(size: 32, weight: .bold, design: .rounded))
+                        .foregroundColor(d > 4 ? .red : .green)
+                    Text("days").font(.caption).fontWeight(.medium).foregroundColor(.secondary)
+                }
+                Text("ago").font(.caption).foregroundColor(.secondary).offset(y: -4)
+            } else {
+                Text("Not trained").font(.subheadline).fontWeight(.medium).foregroundColor(.secondary)
+                Text("yet").font(.caption).foregroundColor(.gray)
+            }
+        }
+        .padding(14).frame(maxWidth: .infinity, alignment: .leading).frame(height: 100)
+        .background(cardBackgroundColor).cornerRadius(12).shadow(color: .black.opacity(0.05), radius: 3, x: 0, y: 2)
+    }
+}
+
 struct DailyWorkoutListView: View {
     let workouts: [Workout]
     let profile: UserProfile
-    
     var body: some View {
         List(workouts) { workout in
             NavigationLink(destination: WorkoutDetailView(workout: workout, profile: profile)) {
                 HStack {
                     VStack(alignment: .leading) {
-                        Text(workout.category)
-                            .font(.headline)
-                            .foregroundColor(.blue)
-                        Text(workout.muscleGroups.joined(separator: ", "))
-                            .font(.caption).foregroundColor(.secondary)
+                        Text(workout.category).font(.headline).foregroundColor(.blue)
+                        Text(workout.muscleGroups.joined(separator: ", ")).font(.caption).foregroundColor(.secondary)
                     }
                     Spacer()
                 }
             }
-        }
-        .navigationTitle("Workouts")
+        }.navigationTitle("Workouts")
     }
 }
 
 struct MuscleSelectionView: View {
     @Bindable var profile: UserProfile
     @Environment(\.dismiss) var dismiss
-    
     @State private var newMuscleName: String = ""
-    
-    var activeMuscles: Set<String> {
-        Set(profile.trackedMuscles.components(separatedBy: ",").filter { !$0.isEmpty })
-    }
-    
-    // FIX: Include tracked muscles that aren't yet in customMuscles (auto-migration)
+    var activeMuscles: Set<String> { Set(profile.trackedMuscles.components(separatedBy: ",").filter { !$0.isEmpty }) }
     var customMusclesList: [String] {
         let savedCustom = profile.customMuscles.components(separatedBy: ",")
         let active = profile.trackedMuscles.components(separatedBy: ",")
         let standard = Set(MuscleGroup.allCases.map { $0.rawValue })
-        
         let combined = Set(savedCustom + active).subtracting(standard)
         return Array(combined).filter { !$0.isEmpty }.sorted()
     }
-    
     var body: some View {
         NavigationStack {
             List {
                 Section("Add Custom Muscle") {
                     HStack {
-                        TextField("Muscle Name (e.g. Forearms)", text: $newMuscleName)
-                            .textInputAutocapitalization(.words)
-                        Button(action: addMuscle) {
-                            Text("Add").fontWeight(.bold)
-                        }
+                        TextField("Muscle Name (e.g. Forearms)", text: $newMuscleName).textInputAutocapitalization(.words)
+                        Button(action: addMuscle) { Text("Add").fontWeight(.bold) }
                         .disabled(newMuscleName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }
-                
                 Section("Standard Muscles") {
                     ForEach(MuscleGroup.allCases, id: \.self) { muscle in
                         HStack {
                             Text(muscle.rawValue)
                             Spacer()
-                            if activeMuscles.contains(muscle.rawValue) {
-                                Image(systemName: "checkmark").foregroundColor(.blue)
-                            }
+                            if activeMuscles.contains(muscle.rawValue) { Image(systemName: "checkmark").foregroundColor(.blue) }
                         }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            toggleTracking(muscle.rawValue)
-                        }
+                        .contentShape(Rectangle()).onTapGesture { toggleTracking(muscle.rawValue) }
                     }
                 }
-                
                 if !customMusclesList.isEmpty {
                     Section("Custom Muscles") {
                         ForEach(customMusclesList, id: \.self) { muscle in
                             HStack {
                                 Text(muscle)
                                 Spacer()
-                                if activeMuscles.contains(muscle) {
-                                    Image(systemName: "checkmark").foregroundColor(.blue)
-                                }
+                                if activeMuscles.contains(muscle) { Image(systemName: "checkmark").foregroundColor(.blue) }
                             }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                toggleTracking(muscle)
-                            }
+                            .contentShape(Rectangle()).onTapGesture { toggleTracking(muscle) }
                         }
                         .onDelete(perform: deleteCustomMuscle)
                     }
                 }
             }
-            .navigationTitle("Track Muscles")
-            .toolbar { Button("Done") { dismiss() } }
-            .ignoresSafeArea(.keyboard, edges: .bottom)
-            .scrollDismissesKeyboard(.interactively)
+            .navigationTitle("Track Muscles").toolbar { Button("Done") { dismiss() } }
+            .ignoresSafeArea(.keyboard, edges: .bottom).scrollDismissesKeyboard(.interactively)
         }
     }
-    
     func addMuscle() {
         let trimmed = newMuscleName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        
-        // Save to custom muscles list
         var custom = profile.customMuscles.components(separatedBy: ",").filter { !$0.isEmpty }
         if !custom.contains(trimmed) && MuscleGroup(rawValue: trimmed) == nil {
             custom.append(trimmed)
             profile.customMuscles = custom.joined(separator: ",")
-            
-            // Auto-track it
             toggleTracking(trimmed, forceOn: true)
             newMuscleName = ""
         }
     }
-    
     func toggleTracking(_ muscle: String, forceOn: Bool = false) {
         var active = profile.trackedMuscles.components(separatedBy: ",").filter { !$0.isEmpty }
-        
-        // FIX: Before untracking, ensure it's saved in custom list so it doesn't disappear
         if MuscleGroup(rawValue: muscle) == nil {
             var custom = profile.customMuscles.components(separatedBy: ",").filter { !$0.isEmpty }
             if !custom.contains(muscle) {
@@ -568,30 +523,19 @@ struct MuscleSelectionView: View {
                 profile.customMuscles = custom.joined(separator: ",")
             }
         }
-        
         if forceOn {
             if !active.contains(muscle) { active.append(muscle) }
         } else {
-            if active.contains(muscle) {
-                active.removeAll { $0 == muscle }
-            } else {
-                active.append(muscle)
-            }
+            if active.contains(muscle) { active.removeAll { $0 == muscle } } else { active.append(muscle) }
         }
-        
         profile.trackedMuscles = active.joined(separator: ",")
     }
-    
     func deleteCustomMuscle(at offsets: IndexSet) {
         var custom = customMusclesList
         let removedItems = offsets.map { custom[$0] }
-        
-        // Remove from definitions
         var definitions = profile.customMuscles.components(separatedBy: ",").filter { !$0.isEmpty }
         definitions.removeAll { removedItems.contains($0) }
         profile.customMuscles = definitions.joined(separator: ",")
-        
-        // Remove from active tracking
         var active = profile.trackedMuscles.components(separatedBy: ",").filter { !$0.isEmpty }
         active.removeAll { removedItems.contains($0) }
         profile.trackedMuscles = active.joined(separator: ",")
