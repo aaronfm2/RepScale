@@ -369,6 +369,10 @@ struct WeightListContent: View {
              events.append("\(latestStart.goalType) Goal Started")
         }
         
+        if let oldest = weights.last, Calendar.current.isDate(date, inSameDayAs: oldest.date) {
+            events.removeAll { $0.contains("Ended") }
+        }
+        
         return events
     }
 
