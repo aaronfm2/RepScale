@@ -12,6 +12,7 @@ struct LogDetailView: View {
     @EnvironmentObject var healthManager: HealthManager
     @State private var isSyncing = false
     @State private var showingEditOverrides = false
+    @State private var showingDetailedNutrition = false
     
     var weightLabel: String { profile.unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
 
@@ -57,17 +58,13 @@ struct LogDetailView: View {
                 notesSection
                 
                 // --- FIX: Manual Spacer for Keyboard ---
-                // Since we ignore the keyboard safe area to prevent glitches,
-                // we add this space so you can scroll the note editor up high enough to see it.
                 Color.clear.frame(height: 400)
             }
             .padding(.bottom, 30)
         }
         .background(appBackgroundColor)
-        // --- FIX START: Prevents "Blank Screen" Glitch ---
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .scrollDismissesKeyboard(.interactively)
-        // --- FIX END ---
         .navigationTitle("Daily Summary")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -88,7 +85,6 @@ struct LogDetailView: View {
                 }
             }
             
-            // --- FIX: Keyboard Done Button ---
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("Done") {
@@ -100,6 +96,9 @@ struct LogDetailView: View {
         .sheet(isPresented: $showingEditOverrides) {
             EditOverridesSheet(log: log)
         }
+        .sheet(isPresented: $showingDetailedNutrition) {
+            DetailedNutritionView(date: log.date, healthManager: healthManager)
+        }
     }
     
     // --- Weight Section View ---
@@ -108,7 +107,6 @@ struct LogDetailView: View {
             HStack {
                 Text("Weight Log").font(.headline)
                 Spacer()
-                // Goal Type Badge
                 if let goal = log.goalType {
                     Text(goal)
                         .font(.caption2)
@@ -230,8 +228,11 @@ struct LogDetailView: View {
                 VStack(alignment: .leading) {
                     Text("Total Consumed")
                         .font(.caption).foregroundColor(.secondary)
+                    // UPDATED: Combined Text for size differentiation
                     Text("\(log.caloriesConsumed)")
-                        .font(.title3).bold()
+                        .font(.title3).bold() +
+                    Text(" Calories")
+                        .font(.caption).foregroundColor(.secondary)
                 }
                 Spacer()
                 
@@ -245,9 +246,23 @@ struct LogDetailView: View {
                     }
                 }
             }
+            
+            Divider()
+            
+            Button(action: { showingDetailedNutrition = true }) {
+                HStack {
+                    Text("See All Nutrition Data")
+                        .fontWeight(.medium)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                }
+                .font(.subheadline)
+                .foregroundColor(.blue)
+            }
+            .padding(.top, 4)
         }
         .padding()
-        // Apply Card Background
         .background(RoundedRectangle(cornerRadius: 12).fill(cardBackgroundColor))
         .padding(.horizontal)
     }
@@ -312,7 +327,6 @@ struct LogDetailView: View {
             }
         }
         .padding()
-        // Apply Card Background
         .background(RoundedRectangle(cornerRadius: 12).fill(cardBackgroundColor))
         .padding(.horizontal)
     }
@@ -341,7 +355,6 @@ struct LogDetailView: View {
         .padding(.vertical, 2)
     }
     
-    // Notes Section (Daily Log Note)
     private var notesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Daily Note").font(.headline).padding(.horizontal)
@@ -454,5 +467,55 @@ struct MacroCard: View {
         .background(backgroundColor)
         .cornerRadius(10)
         .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+    }
+}
+
+// MARK: - New View for Detailed Stats
+struct DetailedNutritionView: View {
+    let date: Date
+    @ObservedObject var healthManager: HealthManager
+    @State private var items: [NutritionItem] = []
+    @State private var isLoading = true
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                if isLoading {
+                    HStack {
+                        Spacer()
+                        ProgressView("Fetching HealthKit Data...")
+                        Spacer()
+                    }
+                    .listRowBackground(Color.clear)
+                } else if items.isEmpty {
+                    ContentUnavailableView("No Data", systemImage: "chart.bar.doc.horizontal", description: Text("No detailed nutrition data found in HealthKit for this day."))
+                } else {
+                    Section(header: Text("Details")) {
+                        ForEach(items) { item in
+                            HStack {
+                                Text(item.name)
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                Text("\(item.value, specifier: "%.1f")")
+                                    .fontWeight(.semibold)
+                                Text(item.unit)
+                                    .foregroundStyle(.secondary)
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Nutrition Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                Button("Done") { dismiss() }
+            }
+            .task {
+                items = await healthManager.fetchDetailedNutrition(for: date)
+                withAnimation { isLoading = false }
+            }
+        }
     }
 }
