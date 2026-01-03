@@ -19,6 +19,10 @@ struct AddWorkoutView: View {
     // 2. State to track the live workout for autosaves
     @State private var activeWorkout: Workout?
     
+    // MARK: - STABILITY FIX
+    // Using a shared focus state at the top level prevents row-level constraint conflicts
+    @FocusState private var isInputFocused: Bool
+    
     init(workoutToEdit: Workout?, profile: UserProfile) {
         self.workoutToEdit = workoutToEdit
         self.profile = profile
@@ -77,7 +81,6 @@ struct AddWorkoutView: View {
 
                         // Manual Save Button (Finalizes)
                         Button("Done") {
-                            // Cancel any pending debounce tasks before final save
                             viewModel.forceImmediateSave(context: modelContext, originalWorkout: activeWorkout)
                             dismiss()
                         }
@@ -85,12 +88,22 @@ struct AddWorkoutView: View {
                         .bold()
                     }
                 }
+
+                // MARK: - KEYBOARD TOOLBAR FIX
+                // Placing the keyboard toolbar here (at the NavigationStack level)
+                // ensures it remains visible even when rows are added/removed.
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        isInputFocused = false
+                    }
+                    .fontWeight(.bold)
+                }
             }
             .sheet(isPresented: $viewModel.showAddExerciseSheet) {
                 let muscleStrings = Set(viewModel.selectedMuscles)
                 AddExerciseSheet(exercises: $viewModel.exercises, workoutMuscles: muscleStrings, profile: profile)
                     .onDisappear {
-                        // Autosave when returning from adding an exercise
                         triggerDebouncedSave()
                     }
             }
@@ -108,42 +121,17 @@ struct AddWorkoutView: View {
                 Text("Save the current exercises and settings as a template?")
             }
             
-            // MARK: - AUTOSAVE TRIGGERS
-            
-            // 3. Save when app goes to background (Critical for data safety)
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .background || newPhase == .inactive {
-                    // Force save immediately, bypassing the debounce timer
                     viewModel.forceImmediateSave(context: modelContext, originalWorkout: activeWorkout)
-                }
-            }
-        }
-        // MARK: - KEYBOARD TOOLBAR
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") {
-                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
             }
         }
     }
     
-    // MARK: - Autosave Helpers
-    
-    /// Triggers the ViewModel to wait 2 seconds, then save.
-    /// Does not re-render the view.
     private func triggerDebouncedSave() {
         guard !viewModel.exercises.isEmpty else { return }
-        
-        // Pass the context and the current active workout to the VM
         viewModel.scheduleAutosave(context: modelContext, originalWorkout: activeWorkout)
-        
-        // Note: We don't need to manually update `activeWorkout` here immediately.
-        // The save function in VM should ideally return the saved ID or object if needed,
-        // but for autosave, relying on the ID persistence is usually sufficient.
-        // If your saveWorkout returns a NEW object every time (creation), you might need to handle that logic
-        // in the main actor closure in the VM.
     }
 }
 
@@ -198,18 +186,9 @@ extension AddWorkoutView {
                                 exercise: ex,
                                 index: index,
                                 unitSystem: profile.unitSystem,
-                                // PERFORMANCE FIX: Pass the trigger function, don't update State
+                                focusState: $isInputFocused,
                                 onInputChanged: { triggerDebouncedSave() }
                             )
-                            .swipeActions(edge: .leading) {
-                                Button {
-                                    viewModel.duplicateExercise(ex)
-                                    triggerDebouncedSave()
-                                } label: {
-                                    Label("Copy", systemImage: "plus.square.on.square")
-                                }
-                                .tint(.blue)
-                            }
                         }
                         .onDelete { indexSet in
                             viewModel.deleteFromGroup(group: group, at: indexSet)
@@ -250,6 +229,7 @@ extension AddWorkoutView {
     private var notesSection: some View {
         Section("Notes") {
             TextField("Workout notes...", text: $viewModel.note)
+                .focused($isInputFocused)
                 .onChange(of: viewModel.note) {
                     triggerDebouncedSave()
                 }
@@ -257,7 +237,94 @@ extension AddWorkoutView {
     }
 }
 
-// MARK: - Helper Views
+// MARK: - Subviews
+
+struct EditExerciseRow: View {
+    @Bindable var exercise: ExerciseEntry
+    let index: Int
+    let unitSystem: String
+    var focusState: FocusState<Bool>.Binding
+    var onInputChanged: () -> Void
+    
+    var weightLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
+    var distLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "mi" : "km" }
+    
+    var body: some View {
+        let weightBinding = Binding<Double?>(
+            get: { exercise.weight?.toUserWeight(system: unitSystem) },
+            set: { exercise.weight = $0?.toStoredWeight(system: unitSystem) }
+        )
+        
+        let distBinding = Binding<Double?>(
+            get: { exercise.distance?.toUserDistance(system: unitSystem) },
+            set: { exercise.distance = $0?.toStoredDistance(system: unitSystem) }
+        )
+        
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Set \(index + 1)").font(.caption).fontWeight(.bold).foregroundColor(.secondary).frame(width: 45, alignment: .leading)
+                Divider()
+                
+                if exercise.isCardio {
+                    HStack {
+                        TextField("Dist", value: distBinding, format: .number)
+                            .keyboardType(.decimalPad)
+                            .focused(focusState)
+                            .frame(width: 60)
+                            .onChange(of: exercise.distance) { onInputChanged() }
+                        
+                        Text(distLabel)
+                        Spacer()
+                        
+                        TextField("Time", value: $exercise.duration, format: .number)
+                            .keyboardType(.numberPad)
+                            .focused(focusState)
+                            .frame(width: 60)
+                            .onChange(of: exercise.duration) { onInputChanged() }
+                        
+                        Text("min")
+                    }.foregroundColor(.blue)
+                } else {
+                    HStack {
+                        TextField("Reps", value: $exercise.reps, format: .number)
+                            .keyboardType(.numberPad)
+                            .focused(focusState)
+                            .frame(width: 40)
+                            .multilineTextAlignment(.trailing)
+                            .padding(4)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(5)
+                            .onChange(of: exercise.reps) { onInputChanged() }
+                        
+                        Text("reps").font(.caption).foregroundColor(.secondary)
+                        Spacer()
+                        Text("x").foregroundColor(.secondary)
+                        Spacer()
+                        
+                        TextField("Weight", value: weightBinding, format: .number)
+                            .keyboardType(.decimalPad)
+                            .focused(focusState)
+                            .frame(width: 60)
+                            .multilineTextAlignment(.trailing)
+                            .padding(4)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(5)
+                            .onChange(of: exercise.weight) { onInputChanged() }
+                        
+                        Text(weightLabel).font(.caption).foregroundColor(.secondary)
+                    }
+                }
+            }
+            TextField("Add note...", text: $exercise.note)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.leading, 60)
+                .focused(focusState)
+                .onChange(of: exercise.note) { onInputChanged() }
+        }
+        .padding(.vertical, 2)
+    }
+}
 
 struct RestTimerSection: View {
     @State private var timeRemaining: Int = 0
@@ -341,88 +408,6 @@ struct RestTimerSection: View {
         AudioServicesPlaySystemSound(1005)
         AudioServicesPlaySystemSound(1005)
         AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
-    }
-}
-
-struct EditExerciseRow: View {
-    @Bindable var exercise: ExerciseEntry
-    let index: Int
-    let unitSystem: String
-    // PERFORMANCE FIX: This callback no longer triggers a Parent State Update
-    var onInputChanged: () -> Void
-    
-    var weightLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
-    var distLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "mi" : "km" }
-    
-    var body: some View {
-        let weightBinding = Binding<Double?>(
-            get: { exercise.weight?.toUserWeight(system: unitSystem) },
-            set: { exercise.weight = $0?.toStoredWeight(system: unitSystem) }
-        )
-        
-        let distBinding = Binding<Double?>(
-            get: { exercise.distance?.toUserDistance(system: unitSystem) },
-            set: { exercise.distance = $0?.toStoredDistance(system: unitSystem) }
-        )
-        
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Set \(index + 1)").font(.caption).fontWeight(.bold).foregroundColor(.secondary).frame(width: 45, alignment: .leading)
-                Divider()
-                
-                if exercise.isCardio {
-                    HStack {
-                        TextField("Dist", value: distBinding, format: .number)
-                            .keyboardType(.decimalPad)
-                            .frame(width: 60)
-                            .onChange(of: exercise.distance) { onInputChanged() }
-                        
-                        Text(distLabel)
-                        Spacer()
-                        
-                        TextField("Time", value: $exercise.duration, format: .number)
-                            .keyboardType(.numberPad)
-                            .frame(width: 60)
-                            .onChange(of: exercise.duration) { onInputChanged() }
-                        
-                        Text("min")
-                    }.foregroundColor(.blue)
-                } else {
-                    HStack {
-                        TextField("Reps", value: $exercise.reps, format: .number)
-                            .keyboardType(.numberPad)
-                            .frame(width: 40)
-                            .multilineTextAlignment(.trailing)
-                            .padding(4)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(5)
-                            .onChange(of: exercise.reps) { onInputChanged() }
-                        
-                        Text("reps").font(.caption).foregroundColor(.secondary)
-                        Spacer()
-                        Text("x").foregroundColor(.secondary)
-                        Spacer()
-                        
-                        TextField("Weight", value: weightBinding, format: .number)
-                            .keyboardType(.decimalPad)
-                            .frame(width: 60)
-                            .multilineTextAlignment(.trailing)
-                            .padding(4)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(5)
-                            .onChange(of: exercise.weight) { onInputChanged() }
-                        
-                        Text(weightLabel).font(.caption).foregroundColor(.secondary)
-                    }
-                }
-            }
-            TextField("Add note...", text: $exercise.note)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .padding(.leading, 60)
-                .onChange(of: exercise.note) { onInputChanged() }
-        }
-        .padding(.vertical, 2)
     }
 }
 
