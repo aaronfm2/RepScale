@@ -52,6 +52,9 @@ struct AddWorkoutView: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(workoutToEdit == nil ? "Log Workout" : "Edit Workout")
             .toolbar {
+                // MARK: - Navigation Bar Items
+                // (Cancel, Save, Templates)
+                
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") { dismiss() }
                 }
@@ -85,12 +88,6 @@ struct AddWorkoutView: View {
                         }
                         .disabled(viewModel.selectedMuscles.isEmpty)
                         .bold()
-                    }
-                }
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                     }
                 }
             }
@@ -138,6 +135,16 @@ struct AddWorkoutView: View {
                     performAutosave()
                 } catch {
                     // Task was cancelled because user kept typing; do nothing.
+                }
+            }
+        }
+        // MARK: - KEYBOARD TOOLBAR
+        // Attached to the NavigationStack so it persists even when Form content changes (like adding the first exercise)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
             }
         }
