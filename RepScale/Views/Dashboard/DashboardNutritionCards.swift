@@ -46,7 +46,7 @@ struct NutritionHistoryCard: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            // 1. Header Section
+            // Header
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Nutrition History")
@@ -75,7 +75,7 @@ struct NutritionHistoryCard: View {
                 }
             }
             
-            // 2. Controls: Metric Picker and Year Picker
+            // Controls: Metric Picker and Year Picker
             HStack {
                 Picker("Metric", selection: $selectedMetric) {
                     ForEach(NutritionMetric.allCases) { metric in
@@ -94,7 +94,7 @@ struct NutritionHistoryCard: View {
                 .frame(width: 100)
             }
             
-            // 3. Chart & Stats Section
+            // Chart Data
             let data = calculateMonthlyAverages(for: selectedYear)
             let ytdAverage = calculateYearlyAverage(for: selectedYear)
             
@@ -114,7 +114,7 @@ struct NutritionHistoryCard: View {
                     AxisMarks(position: .leading)
                 }
                 .chartXAxis {
-                    // Show all 12 months on the axis
+                    // Show all 12 months
                     AxisMarks(values: .stride(by: .month)) { value in
                         if let date = value.as(Date.self) {
                             AxisValueLabel {
@@ -123,11 +123,11 @@ struct NutritionHistoryCard: View {
                         }
                     }
                 }
-                // Ensure chart domain covers Jan-Dec
+                // Ensure the chart always spans Jan-Dec
                 .chartXScale(domain: dateRange(for: selectedYear))
                 .frame(height: 220)
                 
-                // 4. Footer Stats
+                // Stats Footer
                 HStack(spacing: 20) {
                     // Current Average (Latest non-zero month)
                     if let lastWithData = data.last(where: { $0.value > 0 }) {
@@ -160,12 +160,9 @@ struct NutritionHistoryCard: View {
                 .padding(.top, 4)
             }
         }
-        // --- CARD STYLING ---
-        .padding() // 1. Add internal padding
-        .background(Color(uiColor: .secondarySystemGroupedBackground)) // 2. Add the "Box" background
-        .cornerRadius(16) // 3. Round the corners
-        .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2) // 4. Subtle shadow (optional, matches original)
-        // --------------------
+        // Match styling of Weight Cards exactly
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
         .onAppear {
             if !availableYears.contains(selectedYear) {
                 selectedYear = availableYears.last ?? Calendar.current.component(.year, from: Date())
