@@ -194,6 +194,7 @@ struct LogTabView: View {
         
         Task {
             let today = Calendar.current.startOfDay(for: Date())
+            let dataManager = DataManager(modelContext: modelContext) // <--- Create DataManager instance
             
             for i in 0..<365 {
                 guard let date = Calendar.current.date(byAdding: .day, value: -i, to: today) else { continue }
@@ -205,9 +206,13 @@ struct LogTabView: View {
                     }
                 }
                 
+                // Fetch Nutrition
                 let data = await healthManager.fetchHistoricalHealthData(for: date)
+                // Fetch Weight
+                let weight = await healthManager.fetchBodyMass(for: date) // <--- Fetch Weight
                 
                 await MainActor.run {
+                    // 1. Update Logs (Existing Logic)
                     if let log = logs.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
                         log.caloriesConsumed = Int(data.consumed) + log.manualCalories
                         if profile.enableCaloriesBurned { log.caloriesBurned = Int(data.burned) }
@@ -223,6 +228,17 @@ struct LogTabView: View {
                         newLog.carbs = Int(data.carbs)
                         newLog.fat = Int(data.fat)
                         modelContext.insert(newLog)
+                    }
+                    
+                    // 2. Update Weight (New Logic)
+                    if weight > 0 {
+                        // Check if a weight entry already exists for this day
+                        let hasWeightEntry = weightEntries.contains { Calendar.current.isDate($0.date, inSameDayAs: date) }
+                        
+                        if !hasWeightEntry {
+                            // Use DataManager to ensure logs are synced
+                            dataManager.addWeightEntry(date: date, weight: weight, goalType: profile.goalType)
+                        }
                     }
                 }
             }

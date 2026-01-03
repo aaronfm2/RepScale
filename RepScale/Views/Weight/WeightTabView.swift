@@ -6,6 +6,8 @@ struct WeightTrackerView: View {
     @Bindable var profile: UserProfile
     
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var healthManager: HealthManager
+    
     @Query(sort: \WeightEntry.date, order: .reverse) private var weights: [WeightEntry]
     
     // We fetch all periods to determine streaks and phase history
@@ -227,9 +229,39 @@ struct WeightTrackerView: View {
                 )
             }
         }
+        .onAppear {
+            fetchHealthKitWeight()
+        }
     }
 
     // MARK: - Logic
+    
+    private func fetchHealthKitWeight() {
+        guard profile.enableHealthKitSync else { return }
+        
+        Task {
+            // Fetch for the last 90 days
+            for dayOffset in 0..<90 {
+                guard let date = Calendar.current.date(byAdding: .day, value: -dayOffset, to: Date()) else { continue }
+                
+                let weight = await healthManager.fetchBodyMass(for: date)
+                
+                // If we found a weight and it's valid (> 0)
+                if weight > 0 {
+                    await MainActor.run {
+                        // Check if we already have a weight entry for this specific date
+                        let targetDate = Calendar.current.startOfDay(for: date)
+                        let hasEntry = weights.contains { Calendar.current.isDate($0.date, inSameDayAs: targetDate) }
+                        
+                        // Only add if no entry exists to prevent overwriting manual edits
+                        if !hasEntry {
+                            dataManager.addWeightEntry(date: date, weight: weight, goalType: profile.goalType)
+                        }
+                    }
+                }
+            }
+        }
+    }
     
     private func getGoalEvents(for date: Date) -> [String] {
         var events: [String] = []

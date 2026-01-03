@@ -35,7 +35,8 @@ class HealthManager: ObservableObject {
     func requestAuthorization() {
         // Start with non-dietary types
         var typesToRead: Set<HKObjectType> = [
-            HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!
+            HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!,
+            HKObjectType.quantityType(forIdentifier: .bodyMass)!
         ]
         
         // Add all dietary types
@@ -133,6 +134,27 @@ class HealthManager: ObservableObject {
             return items.sorted { $0.name < $1.name }
         }
     }
+    
+    // MARK: - Weight Fetching
+        
+        /// Fetches the average body mass for a specific date in kg
+        func fetchBodyMass(for date: Date) async -> Double {
+            return await withCheckedContinuation { continuation in
+                guard let type = HKQuantityType.quantityType(forIdentifier: .bodyMass) else {
+                    continuation.resume(returning: 0)
+                    return
+                }
+                
+                let predicate = getPredicate(for: date)
+                // Using discreteAverage to get a representative weight for the day if multiple samples exist
+                let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .discreteAverage) { _, result, _ in
+                    // Always fetch as kg to match internal storage
+                    let val = result?.averageQuantity()?.doubleValue(for: .gramUnit(with: .kilo)) ?? 0
+                    continuation.resume(returning: val)
+                }
+                healthStore.execute(query)
+            }
+        }
     
     // MARK: - Historical Data Sync (Keep existing for backward compatibility)
     
