@@ -187,6 +187,37 @@ struct LogTabView: View {
 
     // MARK: - Helper Methods
     
+    /// Checks for duplicate DailyLog entries for the same date and removes them.
+    /// Keeps the entry with the most manual data or the first one found.
+    private func deduplicateLogs() {
+        let grouped = Dictionary(grouping: logs) { Calendar.current.startOfDay(for: $0.date) }
+        
+        for (_, dayLogs) in grouped where dayLogs.count > 1 {
+            // Sort by data "richness" to decide which one to keep
+            let sorted = dayLogs.sorted {
+                let s1 = abs($0.manualCalories) + abs($0.manualProtein)
+                let s2 = abs($1.manualCalories) + abs($1.manualProtein)
+                return s1 > s2
+            }
+            
+            if let keep = sorted.first {
+                print("Deduplicating logs for date \(keep.date). Keeping 1, deleting \(sorted.count - 1).")
+                for duplicate in sorted.dropFirst() {
+                    modelContext.delete(duplicate)
+                }
+            }
+        }
+    }
+
+    /// Fetches a log directly from the context to avoid stale Query results
+    private func fetchLog(for date: Date) -> DailyLog? {
+        let normalizedDate = Calendar.current.startOfDay(for: date)
+        let descriptor = FetchDescriptor<DailyLog>(
+            predicate: #Predicate { $0.date == normalizedDate }
+        )
+        return try? modelContext.fetch(descriptor).first
+    }
+    
     private func refreshLast365Days() {
         guard profile.enableHealthKitSync else { return }
         isRefreshingHistory = true
@@ -194,7 +225,7 @@ struct LogTabView: View {
         
         Task {
             let today = Calendar.current.startOfDay(for: Date())
-            let dataManager = DataManager(modelContext: modelContext) // <--- Create DataManager instance
+            let dataManager = DataManager(modelContext: modelContext)
             
             for i in 0..<365 {
                 guard let date = Calendar.current.date(byAdding: .day, value: -i, to: today) else { continue }
@@ -209,11 +240,17 @@ struct LogTabView: View {
                 // Fetch Nutrition
                 let data = await healthManager.fetchHistoricalHealthData(for: date)
                 // Fetch Weight
-                let weight = await healthManager.fetchBodyMass(for: date) // <--- Fetch Weight
+                let weight = await healthManager.fetchBodyMass(for: date)
                 
                 await MainActor.run {
-                    // 1. Update Logs (Existing Logic)
-                    if let log = logs.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
+                    let normalizedDate = Calendar.current.startOfDay(for: date)
+                    
+                    // 1. Update Logs (Refined Logic with Direct Fetch)
+                    // Use a direct fetch to check for existence, bypassing potential @Query lag
+                    let descriptor = FetchDescriptor<DailyLog>(predicate: #Predicate { $0.date == normalizedDate })
+                    let existingLog = try? modelContext.fetch(descriptor).first
+                    
+                    if let log = existingLog {
                         log.caloriesConsumed = Int(data.consumed) + log.manualCalories
                         if profile.enableCaloriesBurned { log.caloriesBurned = Int(data.burned) }
                         log.protein = Int(data.protein) + log.manualProtein
@@ -230,13 +267,10 @@ struct LogTabView: View {
                         modelContext.insert(newLog)
                     }
                     
-                    // 2. Update Weight (New Logic)
+                    // 2. Update Weight
                     if weight > 0 {
-                        // Check if a weight entry already exists for this day
                         let hasWeightEntry = weightEntries.contains { Calendar.current.isDate($0.date, inSameDayAs: date) }
-                        
                         if !hasWeightEntry {
-                            // Use DataManager to ensure logs are synced
                             dataManager.addWeightEntry(date: date, weight: weight, goalType: profile.goalType)
                         }
                     }
@@ -244,6 +278,7 @@ struct LogTabView: View {
             }
             
             await MainActor.run {
+                deduplicateLogs() // Run cleanup after refresh
                 withAnimation { isRefreshingHistory = false }
             }
         }
@@ -317,20 +352,14 @@ struct LogTabView: View {
                     }
                 }
                 
-                // --- VISIBILITY FIX: Bottom Spacer ---
-                // Because we ignore safe area (to fix the blank screen glitch),
-                // we must manually add space so the bottom fields can be scrolled
-                // up above the keyboard.
                 Section {
                     Color.clear
                         .frame(height: 350)
                 }
                 .listRowBackground(Color.clear)
             }
-            // --- FIX START: Prevents "Blank Screen" Glitch ---
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .scrollDismissesKeyboard(.interactively)
-            // --- FIX END ---
             .navigationTitle("Log Details")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -340,7 +369,6 @@ struct LogTabView: View {
                     Button("Save") { saveLog() }
                 }
                 
-                // --- KEYBOARD TOOLBAR (Done Button Only) ---
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("Done") {
@@ -365,7 +393,8 @@ struct LogTabView: View {
         }
         let latestWeight = dayWeights.sorted(by: { $0.date < $1.date }).last?.weight
         
-        let existingLog = logs.first(where: { $0.date == logDate })
+        // Use direct fetch instead of @Query array to ensure we find the log if it exists
+        let existingLog = fetchLog(for: logDate)
         
         if let log = existingLog {
             if let w = latestWeight {
@@ -423,6 +452,8 @@ struct LogTabView: View {
     }
     
     private func setupOnAppear() {
+        deduplicateLogs() // Clean up any duplicates on appear
+        
         if profile.enableHealthKitSync {
             healthManager.requestAuthorization()
             healthManager.fetchAllHealthData()
@@ -453,7 +484,9 @@ struct LogTabView: View {
     
     private func updateTodayLog(update: (DailyLog) -> Void) {
         let todayDate = Calendar.current.startOfDay(for: Date())
-        if let todayLog = logs.first(where: { $0.date == todayDate }) {
+        
+        // Use direct fetch to prevent creating a duplicate if @Query hasn't updated yet
+        if let todayLog = fetchLog(for: todayDate) {
             update(todayLog)
         } else {
             let newLog = DailyLog(date: todayDate, goalType: profile.goalType)
