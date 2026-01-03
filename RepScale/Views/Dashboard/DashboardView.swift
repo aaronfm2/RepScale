@@ -22,38 +22,10 @@ struct DashboardView: View {
     
     @State private var layout: [DashboardCardConfig] = []
     
-    // MARK: - Time Range Properties
-    var workoutTimeRange: TimeRange {
-        get { TimeRange(rawValue: profile.workoutTimeRange) ?? .thirtyDays }
-        nonmutating set { profile.workoutTimeRange = newValue.rawValue }
-    }
-    
-    var weightHistoryTimeRange: TimeRange {
-        get { TimeRange(rawValue: profile.weightHistoryTimeRange) ?? .thirtyDays }
-        nonmutating set { profile.weightHistoryTimeRange = newValue.rawValue }
-    }
-    
-    // MARK: - Strength Tracker Properties (NEW)
-    var strengthTimeRange: TimeRange {
-        get { TimeRange(rawValue: profile.strengthGraphTimeRange) ?? .ninetyDays }
-        nonmutating set { profile.strengthGraphTimeRange = newValue.rawValue }
-    }
-    
-    var strengthExercise: String {
-        get { profile.strengthGraphExercise }
-        nonmutating set { profile.strengthGraphExercise = newValue }
-    }
-    
-    var strengthReps: Int {
-        get { profile.strengthGraphReps }
-        nonmutating set { profile.strengthGraphReps = newValue }
-    }
-    
     @State private var showingSettings = false
     @State private var showingCustomization = false
     @State private var showingMaintenanceInfo = false
     @State private var showingReconfigureGoal = false
-    @State private var visibleMethods: Set<String> = []
     @State private var showingGoalEdit = false
 
     var weightLabel: String { profile.unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
@@ -62,9 +34,7 @@ struct DashboardView: View {
         profile.isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
     }
     
-    var goalColor: Color {
-        return .blue
-    }
+    var goalColor: Color { .blue }
 
     var body: some View {
         NavigationStack {
@@ -116,9 +86,6 @@ struct DashboardView: View {
                     latestWeightKg: weights.first?.weight
                 )
             }
-            .sheet(isPresented: $showingGoalEdit) {
-                WeeklyGoalEditSheet(goal: $profile.weeklyWorkoutGoal)
-            }
             .alert("About Estimated Maintenance", isPresented: $showingMaintenanceInfo) {
                 Button("OK", role: .cancel) { }
             } message: {
@@ -131,12 +98,7 @@ struct DashboardView: View {
             .onChange(of: profile.dailyCalorieGoal) { _, _ in refreshViewModel() }
             .onChange(of: profile.targetWeight) { _, _ in refreshViewModel() }
             .onChange(of: profile.weeklyWorkoutGoal) { _, _ in refreshViewModel() }
-            .onChange(of: profile.estimationMethod) { _, _ in
-                refreshViewModel()
-                if let method = EstimationMethod(rawValue: profile.estimationMethod) {
-                    visibleMethods = [method.displayName]
-                }
-            }
+            .onChange(of: profile.estimationMethod) { _, _ in refreshViewModel() }
             .onChange(of: profile.maintenanceCalories) { _, _ in refreshViewModel() }
             .onChange(of: profile.maintenanceTolerance) { _, _ in refreshViewModel() }
             .onChange(of: profile.isCalorieCountingEnabled) { _, _ in refreshViewModel() }
@@ -146,40 +108,45 @@ struct DashboardView: View {
     @ViewBuilder
     private func cardView(for type: DashboardCardType, index: Int, totalCount: Int) -> some View {
         switch type {
+        // Weight Cards
         case .projection:
-            projectionComparisonCard(index: index, totalCount: totalCount)
+            ProjectionComparisonCard(
+                profile: profile, viewModel: viewModel, weights: weights,
+                index: index, totalCount: totalCount,
+                onMoveUp: { moveCardUp(index) }, onMoveDown: { moveCardDown(index) }
+            )
         case .weightChange:
-            weightChangeCard(index: index, totalCount: totalCount)
+            WeightChangeCard(
+                profile: profile, viewModel: viewModel,
+                index: index, totalCount: totalCount,
+                onMoveUp: { moveCardUp(index) }, onMoveDown: { moveCardDown(index) }
+            )
         case .weightTrend:
-            weightTrendCard(index: index, totalCount: totalCount)
+            WeightTrendCard(
+                profile: profile, weights: weights,
+                index: index, totalCount: totalCount,
+                onMoveUp: { moveCardUp(index) }, onMoveDown: { moveCardDown(index) }
+            )
+            
+        // Workout Cards
         case .workoutDistribution:
-            workoutDistributionCard(index: index, totalCount: totalCount)
+            WorkoutDistributionCard(
+                profile: profile, workouts: workouts,
+                index: index, totalCount: totalCount,
+                onMoveUp: { moveCardUp(index) }, onMoveDown: { moveCardDown(index) }
+            )
         case .weeklyWorkoutGoal:
-            weeklyGoalCard(index: index, totalCount: totalCount)
-        case .strengthTracker: // <--- NEW CARD CASE
-            strengthTrackerCard(index: index, totalCount: totalCount)
-        }
-    }
-    
-    @ViewBuilder
-    private func reorderArrows(index: Int, totalCount: Int) -> some View {
-        HStack(spacing: 4) {
-            if index > 0 {
-                Button(action: { moveCardUp(index) }) {
-                    Image(systemName: "chevron.up")
-                        .font(.caption2).fontWeight(.bold).foregroundColor(.secondary)
-                        .padding(6).background(Color.secondary.opacity(0.1)).clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-            }
-            if index < totalCount - 1 {
-                Button(action: { moveCardDown(index) }) {
-                    Image(systemName: "chevron.down")
-                        .font(.caption2).fontWeight(.bold).foregroundColor(.secondary)
-                        .padding(6).background(Color.secondary.opacity(0.1)).clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-            }
+            WeeklyGoalCard(
+                profile: profile, viewModel: viewModel,
+                index: index, totalCount: totalCount,
+                onMoveUp: { moveCardUp(index) }, onMoveDown: { moveCardDown(index) }
+            )
+        case .strengthTracker:
+            StrengthTrackerCard(
+                profile: profile, workouts: workouts,
+                index: index, totalCount: totalCount,
+                onMoveUp: { moveCardUp(index) }, onMoveDown: { moveCardDown(index) }
+            )
         }
     }
     
@@ -200,19 +167,11 @@ struct DashboardView: View {
         ensureDailyLogExists()
         loadLayout()
         
-        if visibleMethods.isEmpty {
-            if let method = EstimationMethod(rawValue: profile.estimationMethod) {
-                visibleMethods = [method.displayName]
-            } else {
-                visibleMethods = [EstimationMethod.weightTrend30Day.displayName]
-            }
-        }
-        
         // Default strength exercise initialization
-        if strengthExercise.isEmpty {
+        if profile.strengthGraphExercise.isEmpty {
             // Find most recent exercise, or default to a common one
             if let recent = workouts.first?.exercises?.first?.name {
-                strengthExercise = recent
+                profile.strengthGraphExercise = recent
             }
         }
         
@@ -359,494 +318,14 @@ struct DashboardView: View {
         .shadow(color: goalColor.opacity(0.15), radius: 10, x: 0, y: 5)
     }
     
-    private func weeklyGoalCard(index: Int, totalCount: Int) -> some View {
-        let progress = viewModel.weeklyProgress ?? WeeklyProgress(completedCount: 0, totalGoal: 3, percentage: 0, activeWeekdays: [])
-        let calendar = Calendar.current
-        let todayWeekday = calendar.component(.weekday, from: Date())
-        let days = ["M", "T", "W", "T", "F", "S", "S"]
-        
-        return VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Completed Workout Days")
-                    .font(.headline)
-                
-                Spacer()
-                
-                Button(action: { showingGoalEdit = true }) {
-                    Image(systemName: "gearshape.fill")
-                        .font(.caption).foregroundColor(.secondary)
-                }
-                .padding(.trailing, 8)
-                
-                reorderArrows(index: index, totalCount: totalCount)
-            }
-            
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Completed \(progress.completedCount) of \(progress.totalGoal) days this week")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text("\(Int(progress.percentage * 100))%")
-                        .bold().foregroundColor(.secondary)
-                }
-                .font(.subheadline)
-                
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.gray.opacity(0.2)).frame(height: 8)
-                        Capsule().fill(Color.blue)
-                            .frame(width: max(geo.size.width * progress.percentage, 0), height: 8)
-                            .animation(.spring, value: progress.percentage)
-                    }
-                }
-                .frame(height: 8)
-            }
-            
-            HStack(spacing: 0) {
-                ForEach(0..<7, id: \.self) { i in
-                    let weekdayIndex = (i + 1) % 7 + 1
-                    let isToday = (weekdayIndex == todayWeekday)
-                    let hasWorkout = progress.activeWeekdays.contains(weekdayIndex)
-                    
-                    VStack {
-                        ZStack {
-                            Circle().fill(hasWorkout ? Color.blue.opacity(0.15) : Color.gray.opacity(0.1))
-                            if isToday { Circle().stroke(Color.green, lineWidth: 2) }
-                            Text(days[i]).font(.caption).fontWeight(.bold)
-                                .foregroundColor(hasWorkout ? .blue : .secondary)
-                        }
-                        .frame(height: 35)
-                        
-                        if hasWorkout {
-                            Circle().fill(Color.blue).frame(width: 4, height: 4)
-                        } else {
-                            Circle().fill(Color.clear).frame(width: 4, height: 4)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-        }
-        .padding()
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
-    }
-    
-    private func weightChangeCard(index: Int, totalCount: Int) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Weight Change").font(.headline)
-                Spacer()
-                reorderArrows(index: index, totalCount: totalCount)
-            }
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ForEach(viewModel.weightChangeMetrics) { metric in
-                    weightChangeCell(for: metric)
-                }
-            }
-        }
-        .padding().background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
-    }
-    
-    private func weightChangeCell(for metric: WeightChangeMetric) -> some View {
-        VStack(spacing: 6) {
-            Text(metric.period).font(.caption).fontWeight(.medium).foregroundColor(.secondary)
-            if let val = metric.value {
-                let converted = val.toUserWeight(system: profile.unitSystem)
-                HStack(spacing: 4) {
-                    HStack(spacing: 0) {
-                        Text(val > 0 ? "+" : "")
-                        Text("\(converted, specifier: "%.1f")")
-                        Text(" \(weightLabel)")
-                    }
-                    .foregroundColor(.primary)
-                    if val > 0 { Image(systemName: "arrow.up").foregroundColor(.green).font(.caption).bold() }
-                    else if val < 0 { Image(systemName: "arrow.down").foregroundColor(.red).font(.caption).bold() }
-                }
-                .font(.title3).fontWeight(.bold)
-            } else {
-                Text("--").font(.title3).fontWeight(.bold).foregroundColor(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity).padding(.vertical, 14)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.gray.opacity(0.1)))
-    }
-    
     private func checkGoalReached(current: Double) -> Bool {
         if profile.goalType == GoalType.cutting.rawValue { return current <= profile.targetWeight }
         else if profile.goalType == GoalType.bulking.rawValue { return current >= profile.targetWeight }
         else { return abs(current - profile.targetWeight) <= profile.maintenanceTolerance }
     }
-    
-    private func projectionComparisonCard(index: Int, totalCount: Int) -> some View {
-        let currentWeightKg = weights.first?.weight ?? 0
-        let currentDisplay = currentWeightKg.toUserWeight(system: profile.unitSystem)
-        let targetDisplay = profile.targetWeight.toUserWeight(system: profile.unitSystem)
-        let toleranceDisplay = profile.maintenanceTolerance.toUserWeight(system: profile.unitSystem)
-        
-        let projections = viewModel.projectionPoints.filter { visibleMethods.contains($0.method) }
-            .map { ProjectionPoint(date: $0.date, weight: $0.weight.toUserWeight(system: profile.unitSystem), method: $0.method) }
-        
-        let allValues = projections.map { $0.weight } + [currentDisplay, targetDisplay]
-        let lowerBound = max(0, (allValues.min() ?? 0) - 5)
-        let upperBound = (allValues.max() ?? 100) + 5
-        
-        let methodColors: [EstimationMethod: Color] = [.weightTrend30Day: .blue, .currentEatingHabits: .purple, .perfectGoalAdherence: .orange]
-        var baseMapping: [String: Color] = [:]
-        for method in EstimationMethod.allCases { baseMapping[method.displayName] = methodColors[method] }
-        
-        let activeKeys = EstimationMethod.allCases.map { $0.displayName }.filter { visibleMethods.contains($0) }
-        let activeColors = activeKeys.compactMap { baseMapping[$0] }
-        
-        return VStack(alignment: .leading) {
-            HStack {
-                VStack(alignment: .leading) {
-                    Text("Projections (\(weightLabel))").font(.headline)
-                    Text("Estimated weight over next 60 days").font(.caption).foregroundColor(.secondary)
-                }
-                Spacer()
-                Menu {
-                    Text("Visible Projections")
-                    ForEach(EstimationMethod.allCases) { method in
-                        if profile.isCalorieCountingEnabled || method == .weightTrend30Day {
-                            Toggle(method.displayName, isOn: bindingForMethod(method.displayName))
-                        }
-                    }
-                } label: {
-                    Image(systemName: "chart.line.uptrend.xyaxis").font(.title3).foregroundStyle(.primary)
-                        .padding(8).background(Color.gray.opacity(0.1)).clipShape(Circle())
-                }
-                reorderArrows(index: index, totalCount: totalCount)
-            }
-            .padding(.bottom, 8)
-            
-            if currentWeightKg > 0 {
-                Chart {
-                    RuleMark(y: .value("Target", targetDisplay)).foregroundStyle(.green).lineStyle(StrokeStyle(lineWidth: 2, dash: [5]))
-                        .annotation(position: .top, alignment: .leading) { Text("Target").font(.caption).foregroundColor(.green) }
-                    if profile.goalType == GoalType.maintenance.rawValue {
-                        RuleMark(y: .value("Upper", targetDisplay + toleranceDisplay)).foregroundStyle(.green.opacity(0.3))
-                        RuleMark(y: .value("Lower", targetDisplay - toleranceDisplay)).foregroundStyle(.green.opacity(0.3))
-                    }
-                    ForEach(projections) { point in
-                        LineMark(x: .value("Date", point.date), y: .value("Weight", point.weight))
-                            .foregroundStyle(by: .value("Method", point.method))
-                            .interpolationMethod(.catmullRom).lineStyle(StrokeStyle(lineWidth: 3))
-                    }
-                }
-                .chartForegroundStyleScale(domain: activeKeys, range: activeColors)
-                .chartLegend(.hidden)
-                .frame(height: 250)
-                .chartYScale(domain: lowerBound...upperBound)
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .day, count: 14)) { _ in AxisGridLine(); AxisTick(); AxisValueLabel(format: .dateTime.month().day()) }
-                }
-                if !activeKeys.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Projection Method").font(.caption).fontWeight(.bold).foregroundColor(.secondary)
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], alignment: .leading, spacing: 8) {
-                            ForEach(activeKeys, id: \.self) { key in
-                                HStack(spacing: 6) {
-                                    Circle().fill(baseMapping[key] ?? .gray).frame(width: 8, height: 8)
-                                    Text(key).font(.caption).foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                    }.padding(.top, 10)
-                }
-            } else {
-                Text("Log weight to see projections").frame(maxWidth: .infinity, alignment: .center).padding().font(.caption).foregroundColor(.secondary)
-            }
-        }
-        .padding().background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
-    }
-    
-    private func bindingForMethod(_ method: String) -> Binding<Bool> {
-        Binding(get: { visibleMethods.contains(method) }, set: { if $0 { visibleMethods.insert(method) } else { visibleMethods.remove(method) } })
-    }
-    
-    private func workoutDistributionCard(index: Int, totalCount: Int) -> some View {
-        let filteredWorkouts: [Workout]
-        if let startDate = workoutTimeRange.startDate(from: Date()) {
-            filteredWorkouts = workouts.filter { $0.date >= startDate }
-        } else {
-            filteredWorkouts = workouts
-        }
-        
-        let counts = Dictionary(grouping: filteredWorkouts, by: { $0.category }).mapValues { $0.count }
-        let data = counts.sorted(by: { $0.value > $1.value }).map { (cat: $0.key, count: $0.value) }
-
-        return VStack(alignment: .leading) {
-            HStack {
-                Text("Workout Focus").font(.headline)
-                Spacer()
-                Menu {
-                    ForEach(TimeRange.allCases) { range in
-                        Button(action: { self.workoutTimeRange = range }) {
-                            Label(range.rawValue, systemImage: workoutTimeRange == range ? "checkmark" : "")
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 4) { Text(workoutTimeRange.rawValue); Image(systemName: "chevron.down") }
-                        .font(.caption).fontWeight(.medium).foregroundColor(.blue)
-                        .padding(.horizontal, 8).padding(.vertical, 4).background(Color.blue.opacity(0.1), in: Capsule())
-                }
-                reorderArrows(index: index, totalCount: totalCount)
-            }
-            .padding(.bottom, 4)
-            
-            if data.isEmpty {
-                Text("No workouts logged in this period.").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .center).padding()
-            } else {
-                HStack(spacing: 20) {
-                    Chart(data, id: \.cat) { item in
-                        SectorMark(angle: .value("Count", item.count), innerRadius: .ratio(0.6), angularInset: 2)
-                            .cornerRadius(5).foregroundStyle(byCategoryColor(item.cat))
-                    }.frame(height: 150).frame(maxWidth: 150)
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(data, id: \.cat) { item in
-                            HStack {
-                                Circle().fill(byCategoryColor(item.cat)).frame(width: 8, height: 8)
-                                Text(item.cat).font(.caption).foregroundColor(.primary)
-                                Spacer()
-                                Text("\(item.count)").font(.caption).bold().foregroundColor(.secondary)
-                            }
-                        }
-                    }.frame(maxWidth: .infinity)
-                }
-            }
-        }.padding().background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
-    }
-    
-    private func weightTrendCard(index: Int, totalCount: Int) -> some View {
-        let filteredWeights: [WeightEntry]
-        if let startDate = weightHistoryTimeRange.startDate(from: Date()) {
-            filteredWeights = weights.filter { $0.date >= startDate }
-        } else {
-            filteredWeights = weights
-        }
-        
-        let history = filteredWeights.map { (date: $0.date, weight: $0.weight.toUserWeight(system: profile.unitSystem)) }
-        let allWeights = history.map { $0.weight }
-        let lowerBound = max(0, (allWeights.min() ?? 0) - 5)
-        let upperBound = (allWeights.max() ?? 100) + 5
-        
-        return VStack(alignment: .leading) {
-            HStack {
-                Text("Weight History (\(weightLabel))").font(.headline)
-                Spacer()
-                Menu {
-                    ForEach(TimeRange.allCases) { range in
-                        Button(action: { self.weightHistoryTimeRange = range }) {
-                            Label(range.rawValue, systemImage: weightHistoryTimeRange == range ? "checkmark" : "")
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 4) { Text(weightHistoryTimeRange.rawValue); Image(systemName: "chevron.down") }
-                        .font(.caption).fontWeight(.medium).foregroundColor(.blue)
-                        .padding(.horizontal, 8).padding(.vertical, 4).background(Color.blue.opacity(0.1), in: Capsule())
-                }
-                reorderArrows(index: index, totalCount: totalCount)
-            }
-            .padding(.bottom, 4)
-            
-            if filteredWeights.isEmpty {
-                Text("No weight data available for this period.").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .center).padding()
-            } else {
-                Chart {
-                    ForEach(history.sorted(by: { $0.date < $1.date }), id: \.date) { item in
-                        AreaMark(x: .value("Date", item.date), yStart: .value("Base", lowerBound), yEnd: .value("Weight", item.weight))
-                            .interpolationMethod(.catmullRom)
-                            .foregroundStyle(LinearGradient(colors: [.blue.opacity(0.2), .blue.opacity(0.0)], startPoint: .top, endPoint: .bottom))
-                        LineMark(x: .value("Date", item.date), y: .value("Weight", item.weight))
-                            .interpolationMethod(.catmullRom).foregroundStyle(.blue)
-                            .symbol { Circle().fill(.blue).frame(width: 6, height: 6) }
-                    }
-                }
-                .frame(height: 180).chartYScale(domain: lowerBound...upperBound).chartXScale(domain: .automatic(includesZero: false))
-                .chartXAxis { AxisMarks(values: .automatic(desiredCount: 5)) { _ in AxisGridLine(); AxisTick(); AxisValueLabel(format: .dateTime.month().day()) } }
-                .clipped()
-            }
-        }.padding().background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
-    }
-    
-    // MARK: - NEW: Strength Tracker Card
-    private func strengthTrackerCard(index: Int, totalCount: Int) -> some View {
-        // 1. Data Preparation
-        // Get all unique exercise names from all workouts to populate the picker
-        let allExercises = Array(Set(workouts.flatMap { $0.exercises ?? [] }.map { $0.name })).sorted()
-        
-        // Filter Workouts by Time Range
-        let filteredWorkouts: [Workout]
-        if let startDate = strengthTimeRange.startDate(from: Date()) {
-            filteredWorkouts = workouts.filter { $0.date >= startDate }
-        } else {
-            filteredWorkouts = workouts
-        }
-        
-        // 2. Extract Data Points: (Date, MaxWeight)
-        // Group by Date first to find max weight for that day matching criteria
-        var graphData: [(date: Date, weight: Double)] = []
-        
-        let groupedByDate = Dictionary(grouping: filteredWorkouts, by: { Calendar.current.startOfDay(for: $0.date) })
-        
-        for (date, daysWorkouts) in groupedByDate {
-            var maxWeightForDay: Double = 0
-            var found = false
-            
-            for workout in daysWorkouts {
-                guard let exercises = workout.exercises else { continue }
-                for entry in exercises where entry.name == strengthExercise {
-                    // Check Rep Filter
-                    let reps = entry.reps ?? 0
-                    let matchesReps: Bool
-                    if strengthReps == 21 { // "20+" case
-                        matchesReps = reps >= 20
-                    } else {
-                        matchesReps = reps == strengthReps
-                    }
-                    
-                    if matchesReps, let weight = entry.weight {
-                        let converted = weight.toUserWeight(system: profile.unitSystem)
-                        if converted > maxWeightForDay {
-                            maxWeightForDay = converted
-                            found = true
-                        }
-                    }
-                }
-            }
-            if found {
-                graphData.append((date: date, weight: maxWeightForDay))
-            }
-        }
-        
-        graphData.sort { $0.date < $1.date }
-        
-        let weightsList = graphData.map { $0.weight }
-        let lowerBound = max(0, (weightsList.min() ?? 0) - 10)
-        let upperBound = (weightsList.max() ?? 100) + 10
-        
-        return VStack(alignment: .leading, spacing: 12) {
-            // Header
-            HStack {
-                Text("Strength Tracker").font(.headline)
-                Spacer()
-                reorderArrows(index: index, totalCount: totalCount)
-            }
-            
-            // Filters Row
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    // Exercise Selector
-                    Menu {
-                        if allExercises.isEmpty {
-                            Text("No exercises logged")
-                        } else {
-                            ForEach(allExercises, id: \.self) { name in
-                                Button(name) { strengthExercise = name }
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(strengthExercise.isEmpty ? "Select Exercise" : strengthExercise)
-                                .lineLimit(1)
-                            Image(systemName: "chevron.down")
-                        }
-                        .font(.caption).fontWeight(.medium)
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Color.blue.opacity(0.1), in: Capsule())
-                        .foregroundColor(.blue)
-                    }
-                    
-                    // Reps Selector
-                    Menu {
-                        ForEach(1...20, id: \.self) { i in
-                            Button("\(i) Reps") { strengthReps = i }
-                        }
-                        Button("20+ Reps") { strengthReps = 21 }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(strengthReps == 21 ? "20+ Reps" : "\(strengthReps) Reps")
-                            Image(systemName: "chevron.down")
-                        }
-                        .font(.caption).fontWeight(.medium)
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Color.green.opacity(0.1), in: Capsule())
-                        .foregroundColor(.green)
-                    }
-                    
-                    // Time Range Selector
-                    Menu {
-                        ForEach(TimeRange.allCases) { range in
-                            Button(range.rawValue) { strengthTimeRange = range }
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(strengthTimeRange.rawValue)
-                            Image(systemName: "chevron.down")
-                        }
-                        .font(.caption).fontWeight(.medium)
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Color.orange.opacity(0.1), in: Capsule())
-                        .foregroundColor(.orange)
-                    }
-                }
-            }
-            
-            // Chart
-            if graphData.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "dumbbell.fill")
-                        .font(.largeTitle)
-                        .foregroundColor(.secondary.opacity(0.3))
-                    Text("No data found")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Text("Try adjusting the filters or log this exercise.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 200)
-                .background(Color.gray.opacity(0.05))
-                .cornerRadius(12)
-            } else {
-                Chart {
-                    ForEach(graphData, id: \.date) { item in
-                        LineMark(
-                            x: .value("Date", item.date),
-                            y: .value("Weight", item.weight)
-                        )
-                        .interpolationMethod(.catmullRom)
-                        .foregroundStyle(LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing))
-                        .symbol {
-                            Circle().fill(.blue).frame(width: 8, height: 8)
-                                .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                        }
-                    }
-                }
-                .frame(height: 220)
-                .chartYScale(domain: lowerBound...upperBound)
-                .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: 5)) { _ in
-                        AxisGridLine()
-                        AxisTick()
-                        AxisValueLabel(format: .dateTime.month().day())
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
-    }
-    
-    private func byCategoryColor(_ cat: String) -> Color {
-        switch cat.lowercased() {
-        case "push": return .red; case "pull": return .blue; case "legs": return .green; case "cardio": return .orange
-        case "full body": return .purple; case "upper": return .teal; case "lower": return .brown; default: return .gray
-        }
-    }
 }
 
+// MARK: - Improved Customization Sheet
 struct CustomizationSheet: View {
     @Binding var layout: [DashboardCardConfig]
     var onSave: () -> Void
@@ -855,41 +334,128 @@ struct CustomizationSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                // MARK: - Weight Section
                 Section {
-                    ForEach($layout.indices, id: \.self) { index in
-                        Toggle(isOn: $layout[index].isVisible) {
-                            Text(layout[index].type.rawValue).fontWeight(.medium)
+                    toggleFor(.projection)
+                    toggleFor(.weightChange)
+                    toggleFor(.weightTrend)
+                } header: {
+                    Label("Weight Cards", systemImage: "scalemass")
+                }
+                
+                // MARK: - Workout Section
+                Section {
+                    toggleFor(.workoutDistribution)
+                    toggleFor(.weeklyWorkoutGoal)
+                    toggleFor(.strengthTracker)
+                } header: {
+                    Label("Workout Cards", systemImage: "figure.run")
+                }
+                
+                // MARK: - Nutrition Section
+                Section {
+                    HStack {
+                        Image(systemName: "fork.knife")
+                            .frame(width: 24)
+                        Text("Nutrition Cards")
+                        Spacer()
+                        Text("Coming Soon")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.gray.opacity(0.1), in: Capsule())
+                    }
+                    .foregroundStyle(.secondary)
+                } header: {
+                    Label("Nutrition", systemImage: "leaf")
+                }
+                
+                // MARK: - Other / Unclassified
+                let unclassified = layout.filter { !isClassified($0.type) }
+                if !unclassified.isEmpty {
+                    Section(header: Text("Other")) {
+                        ForEach(unclassified) { config in
+                            toggleFor(config.type)
                         }
                     }
-                } header: { Text("Visible Cards") }
-                footer: { Text("Toggle which cards appear on your dashboard. Use the arrows on the cards themselves to reorder them.") }
+                }
+                
+                // MARK: - Footer Info
+                Section {
+                } footer: {
+                    Text("Toggle which cards appear on your dashboard. Use the arrows on the cards themselves to reorder them.")
+                        .padding(.top, 8)
+                }
             }
-            .navigationTitle("Dashboard Layout")
+            .listStyle(.insetGrouped)
+            .navigationTitle("Customize Layout")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                Button("Done") { onSave(); dismiss() }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Reset") {
+                        withAnimation { resetLayout() }
+                    }
+                    .foregroundStyle(.red)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        onSave()
+                        dismiss()
+                    }
+                    .fontWeight(.bold)
+                }
             }
         }
     }
-}
-
-struct WeeklyGoalEditSheet: View {
-    @Binding var goal: Int
-    @Environment(\.dismiss) var dismiss
     
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Stepper("Goal: \(goal) days", value: $goal, in: 1...7)
-                } footer: {
-                    Text("Set your target for the number of days you want to work out each week.")
+    // MARK: - Helpers
+    
+    private func toggleFor(_ type: DashboardCardType) -> some View {
+        // Find index of this specific type in the layout array
+        if let index = layout.firstIndex(where: { $0.type == type }) {
+            return AnyView(
+                Toggle(isOn: $layout[index].isVisible) {
+                    HStack(spacing: 12) {
+                        Image(systemName: iconFor(type))
+                            .font(.title3)
+                            .frame(width: 28)
+                            .foregroundStyle(.primary)
+                        
+                        Text(type.rawValue)
+                            .fontWeight(.medium)
+                    }
                 }
-            }
-            .navigationTitle("Weekly Goal")
-            .toolbar {
-                Button("Done") { dismiss() }
-            }
+                .tint(.blue) // <--- Changed toggles to Blue
+            )
+        } else {
+            return AnyView(EmptyView())
         }
-        .presentationDetents([.height(200)])
+    }
+    
+    private func resetLayout() {
+        let defaultLayout = DashboardCardType.allCases.map {
+            DashboardCardConfig(type: $0, isVisible: true)
+        }
+        self.layout = defaultLayout
+    }
+    
+    private func isClassified(_ type: DashboardCardType) -> Bool {
+        switch type {
+        case .projection, .weightChange, .weightTrend,
+             .workoutDistribution, .weeklyWorkoutGoal, .strengthTracker:
+            return true
+        }
+    }
+    
+    private func iconFor(_ type: DashboardCardType) -> String {
+        switch type {
+        case .projection: return "chart.xyaxis.line"
+        case .weightChange: return "arrow.up.arrow.down.square"
+        case .weightTrend: return "chart.line.uptrend.xyaxis"
+        case .workoutDistribution: return "chart.pie.fill"
+        case .weeklyWorkoutGoal: return "target"
+        case .strengthTracker: return "dumbbell.fill"
+        }
     }
 }

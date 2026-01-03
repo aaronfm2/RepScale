@@ -56,6 +56,7 @@ struct SettingsView: View {
                         Label("Dark Mode", systemImage: "moon")
                             .foregroundColor(.primary)
                     }
+                    .tint(.blue) // Blue Toggle
                     
                     Picker(selection: $profile.gender) {
                         ForEach(Gender.allCases, id: \.self) { gender in
@@ -75,18 +76,21 @@ struct SettingsView: View {
                         Label("Enable Calorie Counting", systemImage: "flame")
                             .foregroundColor(.primary)
                     }
+                    .tint(.blue) // Blue Toggle
                     
                     if profile.isCalorieCountingEnabled {
                         Toggle(isOn: $profile.enableCaloriesBurned) {
                             Label("Track Calories Burned", systemImage: "figure.run")
                                 .foregroundColor(.primary)
                         }
+                        .tint(.blue) // Blue Toggle
                     }
                     
                     Toggle(isOn: $profile.enableHealthKitSync) {
                         Label("HealthKit Sync", systemImage: "heart.text.square")
                             .foregroundColor(.primary)
                     }
+                    .tint(.blue) // Blue Toggle
                 } header: {
                     Text("Tracking")
                 } footer: {
@@ -197,6 +201,7 @@ struct SettingsView: View {
                 // MARK: - Section 6: Debug / Development
                 Section(header: Text("Debug")) {
                     Toggle("Tutorial Completed", isOn: $hasSeenAppTutorial)
+                        .tint(.blue) // Blue Toggle
                     
                     // 1. RESTART (Safe)
                     Button("Restart Onboarding (Keep Data)") {
