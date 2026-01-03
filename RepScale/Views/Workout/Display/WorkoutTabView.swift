@@ -121,7 +121,7 @@ struct WorkoutTabView: View {
                             .foregroundColor(.secondary)
                             .listRowBackground(cardBackgroundColor)
                     } else {
-                        ForEach(workouts) { workout in
+                        ForEach(workouts.prefix(5)) { workout in
                             NavigationLink(destination: WorkoutDetailView(workout: workout, profile: profile)) {
                                 HStack {
                                     VStack(alignment: .leading) {
