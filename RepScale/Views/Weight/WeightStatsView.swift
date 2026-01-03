@@ -7,7 +7,12 @@ struct WeightStatsView: View {
     var profile: UserProfile
 
     @Environment(\.dismiss) var dismiss
+    
+    // FETCH GOAL PERIODS
     @Query(sort: \GoalPeriod.startDate, order: .reverse) private var rawPeriods: [GoalPeriod]
+    
+    // FETCH WEIGHTS (Used to find the true "Start Date" of tracking)
+    @Query(sort: \WeightEntry.date, order: .forward) private var allWeights: [WeightEntry]
     
     var appBackgroundColor: Color {
         profile.isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
@@ -19,11 +24,38 @@ struct WeightStatsView: View {
     
     // MARK: - 1. Clean Data Logic
     // Filters out "transient" periods (start & end on same day) unless it's the active one.
+    // Also ensures only the MOST RECENT active period is counted.
+    // NEW: Filters out periods that ended BEFORE the first weight entry (glitch/stale data).
     var cleanedPeriods: [GoalPeriod] {
-        rawPeriods.filter { period in
+        var hasActive = false
+        
+        // Identify the earliest weight entry to use as a cutoff
+        let firstWeightDate = allWeights.first?.date
+        
+        return rawPeriods.filter { period in
+            // 1. Handle Active Periods (endDate is nil)
+            if period.endDate == nil {
+                // If we've already found the most recent active period, treat subsequent ones as stale/invalid
+                if hasActive {
+                    return false
+                }
+                hasActive = true
+                return true
+            }
+            
+            // 2. Handle Closed Periods
             if let end = period.endDate {
+                // A. Stale Data Check:
+                // If this period ended BEFORE the user ever logged a weight, it's likely a glitch/onboarding artifact.
+                if let firstDate = firstWeightDate, end < firstDate {
+                    return false
+                }
+                
+                // B. Transient Check:
+                // Filter out periods that start and end on the same day
                 return !Calendar.current.isDate(period.startDate, inSameDayAs: end)
             }
+            
             return true
         }
     }
@@ -63,7 +95,7 @@ struct WeightStatsView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    
+                   
                     // 1. Chart Section (Pie Chart)
                     if !stats.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
@@ -110,14 +142,14 @@ struct WeightStatsView: View {
                             .foregroundColor(.secondary)
                             .padding()
                     }
-                    
+                   
                     // 2. Breakdown Grid
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         StatBox(title: "Cutting", value: "\(getDays(for: .cutting))d", color: .green, bg: cardBackgroundColor)
                         StatBox(title: "Bulking", value: "\(getDays(for: .bulking))d", color: .red, bg: cardBackgroundColor)
                         StatBox(title: "Maintenance", value: "\(getDays(for: .maintenance))d", color: .blue, bg: cardBackgroundColor)
                     }
-                    
+                   
                     // 3. History List (Using Cleaned Periods)
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Phase History")
@@ -130,7 +162,7 @@ struct WeightStatsView: View {
                                         .font(.subheadline)
                                         .bold()
                                         .foregroundColor(getColor(for: period.goalType))
-                                    
+                                   
                                     Text("\(period.startDate, format: .dateTime.day().month().year()) - \(period.endDate?.formatted(.dateTime.day().month().year()) ?? "Now")")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
@@ -143,7 +175,7 @@ struct WeightStatsView: View {
                                     Text("\(days) days")
                                         .font(.callout)
                                         .fontWeight(.medium)
-                                    
+                                   
                                     if period.endDate == nil {
                                         Text("Active")
                                             .font(.caption2)

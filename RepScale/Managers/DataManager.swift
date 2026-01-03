@@ -130,4 +130,40 @@ class DataManager {
         )
         modelContext.insert(newPeriod)
     }
+    
+    // MARK: - Data Fixes
+    
+    /// Syncs the UserProfile and active GoalPeriod start data to match the earliest available WeightEntry.
+    /// Useful if history was deleted but the "Start Date" or "Start Weight" remained stale.
+    func syncStartDataWithHistory() {
+        // 1. Get the earliest valid weight entry
+        let weightDescriptor = FetchDescriptor<WeightEntry>(sortBy: [SortDescriptor(\.date, order: .forward)])
+        
+        do {
+            let weights = try modelContext.fetch(weightDescriptor)
+            guard let earliestEntry = weights.first else {
+                print("No weight history found to sync with.")
+                return
+            }
+            
+            // 2. Fix UserProfile 'createdAt' (often used as "Member Since" or default start)
+            let profileDescriptor = FetchDescriptor<UserProfile>()
+            if let profile = try modelContext.fetch(profileDescriptor).first {
+                profile.createdAt = earliestEntry.date
+            }
+            
+            // 3. Fix the active GoalPeriod (if any) to match the reality of the history
+            // This ensures the "Journey" progress bar uses the correct start point.
+            let goalDescriptor = FetchDescriptor<GoalPeriod>(predicate: #Predicate { $0.endDate == nil })
+            if let activePeriod = try modelContext.fetch(goalDescriptor).first {
+                activePeriod.startDate = earliestEntry.date
+                activePeriod.startWeight = earliestEntry.weight
+            }
+            
+            print("✅ Synced Start Data: Date=\(earliestEntry.date), Weight=\(earliestEntry.weight)")
+            
+        } catch {
+            print("DataManager: Failed to sync start data: \(error)")
+        }
+    }
 }

@@ -323,6 +323,8 @@ struct WeightListContent: View {
         }
         .onAppear {
             fetchHealthKitWeight()
+            // Run the fix: Sync start date with history
+            dataManager.syncStartDataWithHistory()
         }
     }
 

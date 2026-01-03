@@ -52,9 +52,9 @@ struct LaunchScreenView: View {
         
         // SCENARIO B: Re-install / Cloud Sync
         // Flag is false, but maybe CloudKit has data?
-        // Give it 2 seconds to find the profile.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            // After 2 seconds, fade out the overlay.
+        // Give it 2.5 seconds to find the profile.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            // After 2.5 seconds, fade out the overlay.
             withAnimation {
                 showLaunchScreen = false
             }
