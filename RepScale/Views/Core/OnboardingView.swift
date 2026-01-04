@@ -492,6 +492,11 @@ struct OnboardingView: View {
             .padding(.top)
         }
         .scrollDismissesKeyboard(.interactively)
+        .onChange(of: currentStep) { _, newValue in
+            if newValue == 3 {
+                calculateGoalFromDate()
+            }
+        }
     }
     
     var finalStep: some View {
