@@ -29,39 +29,48 @@ struct WeightStatsView: View {
     // Filters out "transient" periods (start & end on same day) unless it's the active one.
     // Also ensures only the MOST RECENT active period is counted.
     // NEW: Filters out periods that ended BEFORE the first weight entry (glitch/stale data).
-    var cleanedPeriods: [GoalPeriod] {
-        var hasActive = false
-        
-        // Identify the earliest weight entry to use as a cutoff
-        let firstWeightDate = allWeights.first?.date
-        
-        return rawPeriods.filter { period in
-            // 1. Handle Active Periods (endDate is nil)
-            if period.endDate == nil {
-                // If we've already found the most recent active period, treat subsequent ones as stale/invalid
-                if hasActive {
-                    return false
-                }
-                hasActive = true
-                return true
-            }
+    // MARK: - 1. Clean Data Logic
+        // Filters out "transient" periods (start & end on same day) unless it's the active one.
+        // Also ensures only the MOST RECENT active period is counted.
+        // NEW: Filters out periods that ended BEFORE the first weight entry (glitch/stale data).
+        var cleanedPeriods: [GoalPeriod] {
+            var hasActive = false
             
-            // 2. Handle Closed Periods
-            if let end = period.endDate {
-                // A. Stale Data Check:
-                // If this period ended BEFORE the user ever logged a weight, it's likely a glitch/onboarding artifact.
-                if let firstDate = firstWeightDate, end < firstDate {
-                    return false
+            // Identify the earliest weight entry to use as a cutoff
+            let firstWeightDate = allWeights.first?.date
+            
+            return rawPeriods.filter { period in
+                // 1. Handle Active Periods (endDate is nil)
+                if period.endDate == nil {
+                    // If we've already found the most recent active period, treat subsequent ones as stale/invalid
+                    if hasActive {
+                        return false
+                    }
+                    hasActive = true
+                    return true
                 }
                 
-                // B. Transient Check:
-                // Filter out periods that start and end on the same day
-                return !Calendar.current.isDate(period.startDate, inSameDayAs: end)
+                // 2. Handle Closed Periods
+                if let end = period.endDate {
+                    // A. Stale Data Check:
+                    // If this period ended BEFORE or ON THE SAME DAY as the first weight entry, it's likely a glitch/onboarding artifact.
+                    if let firstDate = firstWeightDate {
+                        let endDay = Calendar.current.startOfDay(for: end)
+                        let firstDay = Calendar.current.startOfDay(for: firstDate)
+                        
+                        if endDay <= firstDay {
+                            return false
+                        }
+                    }
+                    
+                    // B. Transient Check:
+                    // Filter out periods that start and end on the same day
+                    return !Calendar.current.isDate(period.startDate, inSameDayAs: end)
+                }
+                
+                return true
             }
-            
-            return true
         }
-    }
 
     // MARK: - 2. Stats Logic
     var stats: [(type: String, days: Int, color: Color)] {
