@@ -215,7 +215,8 @@ class DashboardViewModel {
             let end = Calendar.current.startOfDay(for: last.date)
             let timeSpan = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 0
             
-            if timeSpan > 0 {
+            // CHANGED: Require at least 8 days of data for 30-day trend
+            if timeSpan >= 8 {
                 let weightChange = last.weight - first.weight
                 return weightChange / Double(timeSpan)
             }
