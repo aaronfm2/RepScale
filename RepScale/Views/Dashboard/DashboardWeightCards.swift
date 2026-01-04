@@ -14,7 +14,7 @@ struct ProjectionComparisonCard: View {
     var onMoveDown: () -> Void
     
     // Internal State
-    @State private var visibleMethods: Set<String> = []
+    @State private var selectedTimeFrame: Int = 60
     
     var weightLabel: String { profile.unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
     
@@ -24,39 +24,63 @@ struct ProjectionComparisonCard: View {
         let targetDisplay = profile.targetWeight.toUserWeight(system: profile.unitSystem)
         let toleranceDisplay = profile.maintenanceTolerance.toUserWeight(system: profile.unitSystem)
         
-        // Filter projections
-        let projections = viewModel.projectionPoints.filter { visibleMethods.contains($0.method) }
-            .map { ProjectionPoint(date: $0.date, weight: $0.weight.toUserWeight(system: profile.unitSystem), method: $0.method) }
+        // Calculate cutoff date
+        let cutoffDate = Calendar.current.date(byAdding: .day, value: selectedTimeFrame, to: Date())!
+        
+        // Filter projections based on date AND drop values <= 0 so the line stops
+        let projections = viewModel.projectionPoints
+            .filter { $0.date <= cutoffDate }
+            .compactMap { point -> ProjectionPoint? in
+                let converted = point.weight.toUserWeight(system: profile.unitSystem)
+                // If weight is <= 0, return nil to exclude it from the chart entirely
+                guard converted > 0 else { return nil }
+                return ProjectionPoint(date: point.date, weight: converted, method: point.method)
+            }
         
         let allValues = projections.map { $0.weight } + [currentDisplay, targetDisplay]
         let lowerBound = max(0, (allValues.min() ?? 0) - 5)
         let upperBound = (allValues.max() ?? 100) + 5
         
-        let methodColors: [EstimationMethod: Color] = [.weightTrend30Day: .blue, .currentEatingHabits: .purple, .perfectGoalAdherence: .orange]
+        let methodColors: [EstimationMethod: Color] = [
+            .weightTrend30Day: .blue,
+            .weightTrend7Day: .cyan,
+            .currentEatingHabits: .purple,
+            .perfectGoalAdherence: .orange
+        ]
+        
         var baseMapping: [String: Color] = [:]
         for method in EstimationMethod.allCases { baseMapping[method.displayName] = methodColors[method] }
         
-        let activeKeys = EstimationMethod.allCases.map { $0.displayName }.filter { visibleMethods.contains($0) }
+        // Get methods that actually have data in the projection list
+        let availableMethodNames = Set(projections.map { $0.method })
+        let activeKeys = EstimationMethod.allCases.map { $0.displayName }.filter { availableMethodNames.contains($0) }
         let activeColors = activeKeys.compactMap { baseMapping[$0] }
         
         return VStack(alignment: .leading) {
             HStack {
                 VStack(alignment: .leading) {
                     Text("Projections (\(weightLabel))").font(.headline)
-                    Text("Estimated weight over next 60 days").font(.caption).foregroundColor(.secondary)
+                    Text("Estimated weight over next \(selectedTimeFrame) days").font(.caption).foregroundColor(.secondary)
                 }
                 Spacer()
+                
+                // Configurable Timeframe Filter (Capsule Style)
                 Menu {
-                    Text("Visible Projections")
-                    ForEach(EstimationMethod.allCases) { method in
-                        if profile.isCalorieCountingEnabled || method == .weightTrend30Day {
-                            Toggle(method.displayName, isOn: bindingForMethod(method.displayName))
+                    ForEach([30, 60, 90, 180, 365], id: \.self) { days in
+                        Button(action: { selectedTimeFrame = days }) {
+                            Label("\(days) Days", systemImage: selectedTimeFrame == days ? "checkmark" : "")
                         }
                     }
                 } label: {
-                    Image(systemName: "chart.line.uptrend.xyaxis").font(.title3).foregroundStyle(.primary)
-                        .padding(8).background(Color.gray.opacity(0.1)).clipShape(Circle())
+                    HStack(spacing: 4) {
+                        Text("\(selectedTimeFrame) Days")
+                        Image(systemName: "chevron.down")
+                    }
+                    .font(.caption).fontWeight(.medium).foregroundColor(.blue)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Color.blue.opacity(0.1), in: Capsule())
                 }
+                
                 ReorderArrows(index: index, totalCount: totalCount, onUp: onMoveUp, onDown: onMoveDown)
             }
             .padding(.bottom, 8)
@@ -80,7 +104,7 @@ struct ProjectionComparisonCard: View {
                 .frame(height: 250)
                 .chartYScale(domain: lowerBound...upperBound)
                 .chartXAxis {
-                    AxisMarks(values: .stride(by: .day, count: 14)) { _ in AxisGridLine(); AxisTick(); AxisValueLabel(format: .dateTime.month().day()) }
+                    AxisMarks(values: .automatic(desiredCount: 5)) { _ in AxisGridLine(); AxisTick(); AxisValueLabel(format: .dateTime.month().day()) }
                 }
                 if !activeKeys.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
@@ -100,20 +124,6 @@ struct ProjectionComparisonCard: View {
             }
         }
         .padding().background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
-        .onAppear {
-            if visibleMethods.isEmpty {
-                 // Initialize default visible method
-                 if let method = EstimationMethod(rawValue: profile.estimationMethod) {
-                     visibleMethods = [method.displayName]
-                 } else {
-                     visibleMethods = [EstimationMethod.weightTrend30Day.displayName]
-                 }
-             }
-        }
-    }
-    
-    private func bindingForMethod(_ method: String) -> Binding<Bool> {
-        Binding(get: { visibleMethods.contains(method) }, set: { if $0 { visibleMethods.insert(method) } else { visibleMethods.remove(method) } })
     }
 }
 

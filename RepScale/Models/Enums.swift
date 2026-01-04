@@ -15,6 +15,7 @@ enum Gender: String, CaseIterable, Codable {
 // MARK: - Estimation/Projection Methods
 enum EstimationMethod: Int, CaseIterable, Codable, Identifiable {
     case weightTrend30Day = 0
+    case weightTrend7Day = 3
     case currentEatingHabits = 1
     case perfectGoalAdherence = 2
     
@@ -23,6 +24,7 @@ enum EstimationMethod: Int, CaseIterable, Codable, Identifiable {
     var displayName: String {
         switch self {
         case .weightTrend30Day: return "30-Day Weight Trend"
+        case .weightTrend7Day: return "7-Day Weight Trend"
         case .currentEatingHabits: return "Current Average Calorie Consumption"
         case .perfectGoalAdherence: return "Perfect Calorie Target Adherence"
         }
@@ -114,7 +116,7 @@ enum TimeRange: String, CaseIterable, Identifiable {
         case .sevenDays: return Calendar.current.date(byAdding: .day, value: -7, to: now)
         case .thirtyDays: return Calendar.current.date(byAdding: .day, value: -30, to: now)
         case .ninetyDays: return Calendar.current.date(byAdding: .day, value: -90, to: now)
-        case .oneHundredEightyDays: return Calendar.current.date(byAdding: .day, value: -180, to: now) // <--- ADDED
+        case .oneHundredEightyDays: return Calendar.current.date(byAdding: .day, value: -180, to: now)
         case .oneYear: return Calendar.current.date(byAdding: .year, value: -1, to: now)
         case .allTime: return nil
         }

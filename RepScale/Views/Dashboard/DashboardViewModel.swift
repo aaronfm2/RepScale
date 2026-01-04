@@ -146,6 +146,7 @@ class DashboardViewModel {
     private func updateLogicDescription(method: EstimationMethod) {
         switch method {
         case .weightTrend30Day: logicDescription = "Based on 30-day Weight Trend"
+        case .weightTrend7Day: logicDescription = "Based on 7-day Weight Trend"
         case .currentEatingHabits: logicDescription = "Based on 7-day Average Calorie Intake"
         case .perfectGoalAdherence: logicDescription = "Based on Fixed Daily Calorie Amount"
         }
@@ -160,6 +161,8 @@ class DashboardViewModel {
         switch effectiveMethod {
         case .weightTrend30Day:
             progressWarningMessage = "Need more weight data over 30 days, or trend weight is moving away from goal."
+        case .weightTrend7Day:
+            progressWarningMessage = "Need more weight data over 7 days, or trend weight is moving away from goal."
         case .currentEatingHabits:
             progressWarningMessage = settings.goalType == GoalType.cutting.rawValue
                 ? "Eat less than maintenance on average to see estimate"
@@ -218,6 +221,22 @@ class DashboardViewModel {
             }
         }
         
+        if method == .weightTrend7Day {
+            let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
+            let recentWeights = weights.filter { $0.date >= sevenDaysAgo }.sorted { $0.date < $1.date }
+            
+            guard let first = recentWeights.first, let last = recentWeights.last, first.id != last.id else { return nil }
+            
+            let start = Calendar.current.startOfDay(for: first.date)
+            let end = Calendar.current.startOfDay(for: last.date)
+            let timeSpan = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 0
+            
+            if timeSpan > 0 {
+                let weightChange = last.weight - first.weight
+                return weightChange / Double(timeSpan)
+            }
+        }
+        
         if method == .currentEatingHabits {
             let today = Calendar.current.startOfDay(for: Date())
             let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: today)!
@@ -263,7 +282,7 @@ class DashboardViewModel {
         
         let methodsToUse: [EstimationMethod] = settings.isCalorieCountingEnabled
             ? EstimationMethod.allCases
-            : [.weightTrend30Day]
+            : [.weightTrend30Day, .weightTrend7Day]
         
         for method in methodsToUse {
             if let rate = calculateKgChangePerDay(
@@ -276,7 +295,7 @@ class DashboardViewModel {
                 let label = method.displayName
                 
                 points.append(ProjectionPoint(date: today, weight: startWeight, method: label))
-                for i in 1...60 {
+                for i in 1...365 {
                     let nextDate = Calendar.current.date(byAdding: .day, value: i, to: today)!
                     let projectedWeight = startWeight + (rate * Double(i))
                     points.append(ProjectionPoint(date: nextDate, weight: projectedWeight, method: label))
