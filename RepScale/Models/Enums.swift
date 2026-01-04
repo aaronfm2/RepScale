@@ -12,6 +12,35 @@ enum Gender: String, CaseIterable, Codable {
     case female = "Female"
 }
 
+// MARK: - Activity Level (NEW)
+enum ActivityLevel: String, CaseIterable, Codable {
+    case sedentary = "Sedentary"
+    case lightlyActive = "Lightly Active"
+    case moderatelyActive = "Moderately Active"
+    case veryActive = "Very Active"
+    case extraActive = "Extra Active"
+    
+    var multiplier: Double {
+        switch self {
+        case .sedentary: return 1.2
+        case .lightlyActive: return 1.375
+        case .moderatelyActive: return 1.55
+        case .veryActive: return 1.725
+        case .extraActive: return 1.9
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .sedentary: return "Little to no exercise"
+        case .lightlyActive: return "Light exercise 1-3 days/week"
+        case .moderatelyActive: return "Moderate exercise 3-5 days/week"
+        case .veryActive: return "Hard exercise 6-7 days/week"
+        case .extraActive: return "Physical job or training 2x/day"
+        }
+    }
+}
+
 // MARK: - Estimation/Projection Methods
 enum EstimationMethod: Int, CaseIterable, Codable, Identifiable {
     case weightTrend30Day = 0
@@ -47,6 +76,15 @@ extension Double {
     
     func toStoredDistance(system: String) -> Double {
         return system == UnitSystem.imperial.rawValue ? self / 0.621371 : self
+    }
+    
+    // NEW: Height Helpers
+    func toUserHeight(system: String) -> Double {
+        return system == UnitSystem.imperial.rawValue ? self / 30.48 : self // cm to ft
+    }
+    
+    func toStoredHeight(system: String) -> Double {
+        return system == UnitSystem.imperial.rawValue ? self * 30.48 : self // ft to cm
     }
 }
 
@@ -93,7 +131,7 @@ enum DashboardCardType: String, CaseIterable, Codable, Identifiable {
     case workoutDistribution = "Workout Focus"
     case weeklyWorkoutGoal = "Weekly Goal"
     case strengthTracker = "Strength Tracker"
-    case repTracker = "Rep Tracker" 
+    case repTracker = "Rep Tracker"
     case volumeTracker = "Volume Tracker"
     case nutrition = "Nutrition"
     case macroDistribution = "Macro Distribution"

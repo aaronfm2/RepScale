@@ -10,6 +10,11 @@ final class UserProfile {
     var gender: String = Gender.male.rawValue
     var isDarkMode: Bool = true
     
+    // MARK: - Biometrics (NEW)
+    var height: Double = 175.0 // Stored in cm
+    var age: Int = 30
+    var activityLevel: String = ActivityLevel.moderatelyActive.rawValue
+    
     // MARK: - Goals & Strategy
     var dailyCalorieGoal: Int = 2000
     var targetWeight: Double = 70.0
@@ -33,11 +38,10 @@ final class UserProfile {
     var repGraphExercise: String = ""
     var repGraphWeight: Double = -1.0
     
-    // MARK: - Workout Preferences (NEW)
+    // MARK: - Workout Preferences
     var trackedMuscles: String = "Chest,Back,Legs,Shoulders,Abs,Cardio,Biceps,Triceps"
-    // NEW: Persistent storage for user-defined muscles so they aren't lost when untracked
     var customMuscles: String = ""
-    var weeklyWorkoutGoal: Int = 3 // Default to 3 workouts per week
+    var weeklyWorkoutGoal: Int = 3
     
     init() {
         self.createdAt = Date()

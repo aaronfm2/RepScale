@@ -2,23 +2,18 @@ import SwiftUI
 import SwiftData
 
 struct SettingsView: View {
-    // --- CLOUD SYNC: Injected Profile ---
     @Bindable var profile: UserProfile
     
     @Environment(\.dismiss) var dismiss
     @Environment(\.modelContext) private var modelContext
-    // --- Access HealthManager to trigger sync ---
     @EnvironmentObject var healthManager: HealthManager
     
-    // --- App Storage ---
     @AppStorage("hasSeenAppTutorial") private var hasSeenAppTutorial: Bool = true
     @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = true
     
-    // Properties passed from Parent
     let estimatedMaintenance: Int?
     let currentWeight: Double?
     
-    // Internal State
     @State private var showingReconfigureGoal = false
     @State private var isExporting = false
     @State private var exportURL: URL?
@@ -26,7 +21,6 @@ struct SettingsView: View {
     @State private var showingResetAlert = false
     @State private var showingRestartAlert = false
     
-    // Helper accessors for Profile
     var weightLabel: String { profile.unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
     
     var goalColor: Color {
@@ -47,50 +41,80 @@ struct SettingsView: View {
                         ForEach(UnitSystem.allCases, id: \.self) { system in
                             Text(system.rawValue).tag(system.rawValue)
                         }
-                    } label: {
-                        Label("Unit System", systemImage: "ruler")
-                            .foregroundColor(.primary)
-                    }
+                    } label: { Label("Unit System", systemImage: "ruler").foregroundColor(.primary) }
                     
                     Toggle(isOn: $profile.isDarkMode) {
-                        Label("Dark Mode", systemImage: "moon")
-                            .foregroundColor(.primary)
-                    }
-                    .tint(.blue) // Blue Toggle
-                    
-                    Picker(selection: $profile.gender) {
-                        ForEach(Gender.allCases, id: \.self) { gender in
-                            Text(gender.rawValue).tag(gender.rawValue)
-                        }
-                    } label: {
-                        Label("Gender", systemImage: "person")
-                            .foregroundColor(.primary)
-                    }
+                        Label("Dark Mode", systemImage: "moon").foregroundColor(.primary)
+                    }.tint(.blue)
                 } header: {
                     Text("General")
                 }
                 
-                // MARK: - Section 2: Tracking Configuration
+                // MARK: - Section 2: Personal Details (NEW)
+                Section {
+                    Picker(selection: $profile.gender) {
+                        ForEach(Gender.allCases, id: \.self) { gender in
+                            Text(gender.rawValue).tag(gender.rawValue)
+                        }
+                    } label: { Label("Gender", systemImage: "person").foregroundColor(.primary) }
+                    
+                    HStack {
+                        Label("Age", systemImage: "calendar").foregroundColor(.primary)
+                        Spacer()
+                        TextField("Age", value: $profile.age, format: .number)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 50)
+                    }
+                    
+                    HStack {
+                        Label("Height", systemImage: "arrow.up.and.down").foregroundColor(.primary)
+                        Spacer()
+                        if profile.unitSystem == UnitSystem.metric.rawValue {
+                            TextField("cm", value: $profile.height, format: .number)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 60)
+                            Text("cm").foregroundColor(.secondary)
+                        } else {
+                            // Binding to convert cm <-> ft
+                            let heightBinding = Binding<Double>(
+                                get: { profile.height.toUserHeight(system: UnitSystem.imperial.rawValue) },
+                                set: { profile.height = $0.toStoredHeight(system: UnitSystem.imperial.rawValue) }
+                            )
+                            TextField("ft", value: heightBinding, format: .number.precision(.fractionLength(1)))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 60)
+                            Text("ft").foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    Picker(selection: $profile.activityLevel) {
+                        ForEach(ActivityLevel.allCases, id: \.self) { level in
+                            Text(level.rawValue).tag(level.rawValue)
+                        }
+                    } label: { Label("Activity Level", systemImage: "figure.walk").foregroundColor(.primary) }
+                    
+                } header: {
+                    Text("About You")
+                }
+                
+                // MARK: - Section 3: Tracking Configuration
                 Section {
                     Toggle(isOn: $profile.isCalorieCountingEnabled) {
-                        Label("Enable Calorie Counting", systemImage: "flame")
-                            .foregroundColor(.primary)
-                    }
-                    .tint(.blue) // Blue Toggle
+                        Label("Enable Calorie Counting", systemImage: "flame").foregroundColor(.primary)
+                    }.tint(.blue)
                     
                     if profile.isCalorieCountingEnabled {
                         Toggle(isOn: $profile.enableCaloriesBurned) {
-                            Label("Track Calories Burned", systemImage: "figure.run")
-                                .foregroundColor(.primary)
-                        }
-                        .tint(.blue) // Blue Toggle
+                            Label("Track Calories Burned", systemImage: "figure.run").foregroundColor(.primary)
+                        }.tint(.blue)
                     }
                     
                     Toggle(isOn: $profile.enableHealthKitSync) {
-                        Label("HealthKit Sync", systemImage: "heart.text.square")
-                            .foregroundColor(.primary)
-                    }
-                    .tint(.blue) // Blue Toggle
+                        Label("HealthKit Sync", systemImage: "heart.text.square").foregroundColor(.primary)
+                    }.tint(.blue)
                 } header: {
                     Text("Tracking")
                 } footer: {
@@ -99,46 +123,30 @@ struct SettingsView: View {
                     }
                 }
                 
-                // MARK: - Section 3: Goal Dashboard
+                // MARK: - Section 4: Goal Dashboard
                 if profile.isCalorieCountingEnabled {
                     Section {
                         LabeledContent {
-                            Text(profile.goalType)
-                                .fontWeight(.semibold)
-                                .foregroundColor(goalColor)
-                        } label: {
-                            Label("Goal Type", systemImage: "target")
-                                .foregroundColor(.primary)
-                        }
+                            Text(profile.goalType).fontWeight(.semibold).foregroundColor(goalColor)
+                        } label: { Label("Goal Type", systemImage: "target").foregroundColor(.primary) }
                         
-                        LabeledContent("Daily Target") {
-                            Text("\(profile.dailyCalorieGoal) kcal")
-                                .monospacedDigit()
-                        }
+                        LabeledContent("Daily Target") { Text("\(profile.dailyCalorieGoal) kcal").monospacedDigit() }
                         
                         LabeledContent("Target Weight") {
                             Text("\(profile.targetWeight.toUserWeight(system: profile.unitSystem), specifier: "%.1f") \(weightLabel)")
                         }
                         
-                        Button {
-                            showingReconfigureGoal = true
-                        } label: {
-                            Label("Reconfigure Goal", systemImage: "slider.horizontal.3")
-                                .foregroundColor(.primary)
+                        Button { showingReconfigureGoal = true } label: {
+                            Label("Reconfigure Goal", systemImage: "slider.horizontal.3").foregroundColor(.primary)
                         }
-                    } header: {
-                        Text("Strategy")
-                    }
+                    } header: { Text("Strategy") }
                     
                     Section {
                         Picker(selection: $profile.estimationMethod) {
                             ForEach(EstimationMethod.allCases) { method in
                                 Text(method.displayName).tag(method.rawValue)
                             }
-                        } label: {
-                            Label("Prediction Logic", systemImage: "chart.xyaxis.line")
-                                .foregroundColor(.primary)
-                        }
+                        } label: { Label("Prediction Logic", systemImage: "chart.xyaxis.line").foregroundColor(.primary) }
                         
                         if profile.goalType == GoalType.maintenance.rawValue {
                             let toleranceBinding = Binding<Double>(
@@ -146,127 +154,71 @@ struct SettingsView: View {
                                 set: { profile.maintenanceTolerance = $0.toStoredWeight(system: profile.unitSystem) }
                             )
                             HStack {
-                                Label("Weight Tolerance", systemImage: "arrow.left.and.right")
-                                    .foregroundColor(.primary)
+                                Label("Weight Tolerance", systemImage: "arrow.left.and.right").foregroundColor(.primary)
                                 Spacer()
-                                TextField("0.0", value: toleranceBinding, format: .number)
-                                    .keyboardType(.decimalPad)
-                                    .multilineTextAlignment(.trailing)
-                                    .frame(width: 60)
-                                Text(weightLabel)
-                                    .foregroundColor(.secondary)
+                                TextField("0.0", value: toleranceBinding, format: .number).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 60)
+                                Text(weightLabel).foregroundColor(.secondary)
                             }
                         }
-                    } header: {
-                        Text("Calculations")
-                    }
+                    } header: { Text("Calculations") }
                 }
                 
-                // MARK: - Section 4: Data Management
+                // MARK: - Section 5: Data Management
                 Section {
                     Button(action: exportData) {
                         if isExporting {
-                            HStack {
-                                Text("Generating CSV...")
-                                Spacer()
-                                ProgressView()
-                            }
+                            HStack { Text("Generating CSV..."); Spacer(); ProgressView() }
                         } else {
-                            Label("Export Data to CSV", systemImage: "square.and.arrow.up")
-                                .foregroundColor(.primary)
+                            Label("Export Data to CSV", systemImage: "square.and.arrow.up").foregroundColor(.primary)
                         }
-                    }
-                    .disabled(isExporting)
-                } header: {
-                    Text("Data Management")
-                }
+                    }.disabled(isExporting)
+                } header: { Text("Data Management") }
                 
-                // MARK: - Section 5: Community
+                // MARK: - Section 6: Community
                 Section {
                     NavigationLink(destination: HelpSupportView()) {
-                        Label("Help & Support", systemImage: "questionmark.circle")
-                            .foregroundColor(.primary)
+                        Label("Help & Support", systemImage: "questionmark.circle").foregroundColor(.primary)
                     }
-                    
                     if let url = URL(string: "https://www.instagram.com/repscale.app/") {
                         Link(destination: url) {
-                            Label("Follow @RepScale.app", systemImage: "camera")
-                                .foregroundColor(.primary)
+                            Label("Follow @RepScale.app", systemImage: "camera").foregroundColor(.primary)
                         }
                     }
-                } header: {
-                    Text("Community")
-                }
+                } header: { Text("Community") }
                 
-                // MARK: - Section 6: Debug / Development
+                // MARK: - Section 7: Debug / Development
                 Section(header: Text("Debug")) {
-                    Toggle("Tutorial Completed", isOn: $hasSeenAppTutorial)
-                        .tint(.blue) // Blue Toggle
-                    
-                    // 1. RESTART (Safe)
-                    Button("Restart Onboarding (Keep Data)") {
-                        showingRestartAlert = true
-                    }
-                    .foregroundColor(.orange)
-                    .alert("Restart Onboarding?", isPresented: $showingRestartAlert) {
-                        Button("Cancel", role: .cancel) { }
-                        Button("Restart", role: .none) {
-                            // This immediately flips the switch in RootView
-                            isOnboardingCompleted = false
-                        }
-                    } message: {
-                        Text("This will take you back to the welcome screen WITHOUT deleting your data. Note: Finishing onboarding again will create a new profile.")
-                    }
-                    
-                    // 2. RESET (Destructive)
-                    Button("Reset Onboarding (Delete Profile)") {
-                        showingResetAlert = true
-                    }
-                    .foregroundColor(.red)
-                    .alert("Reset Onboarding?", isPresented: $showingResetAlert) {
-                        Button("Cancel", role: .cancel) { }
-                        Button("Reset", role: .destructive) {
-                            deleteProfileAndReset()
-                        }
-                    } message: {
-                        Text("This will delete ALL profiles and reset the app state.")
-                    }
+                    Toggle("Tutorial Completed", isOn: $hasSeenAppTutorial).tint(.blue)
+                    Button("Restart Onboarding (Keep Data)") { showingRestartAlert = true }.foregroundColor(.orange)
+                        .alert("Restart Onboarding?", isPresented: $showingRestartAlert) {
+                            Button("Cancel", role: .cancel) { }
+                            Button("Restart", role: .none) { isOnboardingCompleted = false }
+                        } message: { Text("This will take you back to the welcome screen WITHOUT deleting your data.") }
+                    Button("Reset Onboarding (Delete Profile)") { showingResetAlert = true }.foregroundColor(.red)
+                        .alert("Reset Onboarding?", isPresented: $showingResetAlert) {
+                            Button("Cancel", role: .cancel) { }
+                            Button("Reset", role: .destructive) { deleteProfileAndReset() }
+                        } message: { Text("This will delete ALL profiles and reset the app state.") }
                 }
             }
             .navigationTitle("Settings")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .sheet(isPresented: $showingReconfigureGoal) {
-                GoalConfigurationView(
-                    profile: profile,
-                    appEstimatedMaintenance: estimatedMaintenance,
-                    latestWeightKg: currentWeight
-                )
+                GoalConfigurationView(profile: profile, appEstimatedMaintenance: estimatedMaintenance, latestWeightKg: currentWeight)
             }
-            .sheet(isPresented: $showingShareSheet) {
-                if let url = exportURL {
-                    ShareSheet(activityItems: [url])
-                }
-            }
+            .sheet(isPresented: $showingShareSheet) { if let url = exportURL { ShareSheet(activityItems: [url]) } }
             .presentationDetents([.large])
         }
     }
     
-    // MARK: - Reset Logic
+    // MARK: - Reset & Export Logic
     private func deleteProfileAndReset() {
-        // Delete ALL profiles to prevent "hidden" duplicates keeping you logged in
         try? modelContext.delete(model: UserProfile.self)
-        
         hasSeenAppTutorial = false
         isOnboardingCompleted = false
-        
         try? modelContext.save()
     }
     
-    // MARK: - Export Logic
     private func exportData() {
         isExporting = true
         Task {
@@ -276,11 +228,7 @@ struct SettingsView: View {
                     self.isExporting = false
                     self.showingShareSheet = true
                 }
-            } else {
-                await MainActor.run {
-                    self.isExporting = false
-                }
-            }
+            } else { await MainActor.run { self.isExporting = false } }
         }
     }
     
@@ -391,6 +339,7 @@ struct SettingsView: View {
     }
 }
 
+// MARK: - ShareSheet Helper
 struct ShareSheet: UIViewControllerRepresentable {
     var activityItems: [Any]
     var applicationActivities: [UIActivity]? = nil
