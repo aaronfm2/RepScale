@@ -150,6 +150,8 @@ struct OnboardingView: View {
             }
         }
         .preferredColorScheme(isDarkMode ? .dark : .light)
+        .simultaneousGesture(TapGesture().onEnded { _ in
+            hideKeyboard() })
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -412,92 +414,100 @@ struct OnboardingView: View {
     }
 
     var strategyStep: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                headerText(title: "Tracking Strategy", subtitle: "Choose how you want to achieve your goals.")
-                
-                VStack(spacing: 0) {
-                    Toggle(isOn: $isCalorieCountingEnabled) {
-                        VStack(alignment: .leading) {
-                            Text("Count Calories").font(.headline)
-                            Text("Track daily intake targets").font(.caption).foregroundColor(.secondary)
+            ScrollView {
+                VStack(spacing: 24) {
+                    headerText(title: "Tracking Strategy", subtitle: "Choose how you want to achieve your goals.")
+                    
+                    VStack(spacing: 0) {
+                        Toggle(isOn: $isCalorieCountingEnabled) {
+                            VStack(alignment: .leading) {
+                                Text("Count Calories").font(.headline)
+                                Text("Track daily intake targets").font(.caption).foregroundColor(.secondary)
+                            }
+                        }.padding()
+                        
+                        if isCalorieCountingEnabled {
+                            Divider().padding(.leading)
+                            Toggle(isOn: $trackCaloriesBurned) {
+                                VStack(alignment: .leading) {
+                                    Text("Track Calories Burned").font(.headline)
+                                    Text("Adjust goal based on activity").font(.caption).foregroundColor(.secondary)
+                                }
+                            }.padding()
+                            Divider().padding(.leading)
+                            Toggle(isOn: $knowsDetails) {
+                                VStack(alignment: .leading) {
+                                    Text("Manual Entry").font(.headline)
+                                    Text("I know my specific macro targets").font(.caption).foregroundColor(.secondary)
+                                }
+                            }.padding()
                         }
-                    }.padding()
+                    }
+                    .background(Color.gray.opacity(0.1)).clipShape(RoundedRectangle(cornerRadius: 16)).padding(.horizontal)
                     
                     if isCalorieCountingEnabled {
-                        Divider().padding(.leading)
-                        Toggle(isOn: $trackCaloriesBurned) {
-                            VStack(alignment: .leading) {
-                                Text("Track Calories Burned").font(.headline)
-                                Text("Adjust goal based on activity").font(.caption).foregroundColor(.secondary)
-                            }
-                        }.padding()
-                        Divider().padding(.leading)
-                        Toggle(isOn: $knowsDetails) {
-                            VStack(alignment: .leading) {
-                                Text("Manual Entry").font(.headline)
-                                Text("I know my specific macro targets").font(.caption).foregroundColor(.secondary)
-                            }
-                        }.padding()
-                    }
-                }
-                .background(Color.gray.opacity(0.1)).clipShape(RoundedRectangle(cornerRadius: 16)).padding(.horizontal)
-                
-                if isCalorieCountingEnabled {
-                    if knowsDetails {
-                        VStack(spacing: 16) {
-                            Text("Enter your custom targets").font(.headline)
-                            HStack {
-                                inputField(title: "Maintenance", text: $maintenanceInput)
-                                inputField(title: "Daily Goal", text: $dailyGoalInput)
-                            }
-                            .padding(.horizontal)
-                        }
-                    } else {
-                        VStack(spacing: 16) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Goal Deadline").font(.headline)
-                                DatePicker("Achieve Goal By", selection: $targetDate, in: Date()..., displayedComponents: .date)
-                                    .datePickerStyle(.graphical)
-                                    .background(Color.gray.opacity(0.1)).cornerRadius(12)
-                                    .onChange(of: targetDate) { _, _ in calculateGoalFromDate() }
-                                    .onChange(of: maintenanceInput) { _, _ in calculateGoalFromDate() }
-                            }
-                            .padding(.horizontal)
-                            
+                        if knowsDetails {
                             VStack(spacing: 16) {
-                                Text("Recommended Plan").font(.headline)
-                                HStack(spacing: 30) {
-                                    VStack { Text("Maintenance").font(.caption).foregroundColor(.secondary); Text(maintenanceInput).font(.title2).bold() }
-                                    Image(systemName: "arrow.right").foregroundColor(.secondary)
-                                    VStack { Text("Daily Goal").font(.caption).foregroundColor(.secondary); Text(dailyGoalInput).font(.title2).bold().foregroundColor(.blue) }
+                                Text("Enter your custom targets").font(.headline)
+                                HStack {
+                                    inputField(title: "Maintenance", text: $maintenanceInput)
+                                    inputField(title: "Daily Goal", text: $dailyGoalInput)
                                 }
-                                if let goal = Int(dailyGoalInput), let maint = Int(maintenanceInput) {
-                                    let diff = goal - maint
-                                    Text(diff < 0 ? "\(abs(diff)) calorie deficit / day" : "+\(diff) calorie surplus / day")
-                                        .font(.subheadline).fontWeight(.medium)
-                                        .foregroundColor(diff < 0 ? .green : .orange)
-                                        .padding(.vertical, 4).padding(.horizontal, 12)
-                                        .background((diff < 0 ? Color.green : Color.orange).opacity(0.1))
-                                        .clipShape(Capsule())
-                                }
+                                .padding(.horizontal)
                             }
-                            .padding().frame(maxWidth: .infinity).background(RoundedRectangle(cornerRadius: 16).stroke(Color.blue.opacity(0.3), lineWidth: 1)).padding(.horizontal)
-                            .onAppear { calculateGoalFromDate() }
+                        } else {
+                            VStack(spacing: 16) {
+                                // MARK: - UPDATED DATE PICKER
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Goal Deadline").font(.headline)
+                                    
+                                    // Changed to match Date of Birth style
+                                    DatePicker("", selection: $targetDate, in: Date()..., displayedComponents: .date)
+                                        .labelsHidden()
+                                        .datePickerStyle(.compact)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.vertical, 6)
+                                        .padding(.horizontal)
+                                        .background(Color.gray.opacity(0.1))
+                                        .cornerRadius(12)
+                                        .onChange(of: targetDate) { _, _ in calculateGoalFromDate() }
+                                        .onChange(of: maintenanceInput) { _, _ in calculateGoalFromDate() }
+                                }
+                                .padding(.horizontal)
+                                
+                                VStack(spacing: 16) {
+                                    Text("Recommended Plan").font(.headline)
+                                    HStack(spacing: 30) {
+                                        VStack { Text("Maintenance").font(.caption).foregroundColor(.secondary); Text(maintenanceInput).font(.title2).bold() }
+                                        Image(systemName: "arrow.right").foregroundColor(.secondary)
+                                        VStack { Text("Daily Goal").font(.caption).foregroundColor(.secondary); Text(dailyGoalInput).font(.title2).bold().foregroundColor(.blue) }
+                                    }
+                                    if let goal = Int(dailyGoalInput), let maint = Int(maintenanceInput) {
+                                        let diff = goal - maint
+                                        Text(diff < 0 ? "\(abs(diff)) calorie deficit / day" : "+\(diff) calorie surplus / day")
+                                            .font(.subheadline).fontWeight(.medium)
+                                            .foregroundColor(diff < 0 ? .green : .orange)
+                                            .padding(.vertical, 4).padding(.horizontal, 12)
+                                            .background((diff < 0 ? Color.green : Color.orange).opacity(0.1))
+                                            .clipShape(Capsule())
+                                    }
+                                }
+                                .padding().frame(maxWidth: .infinity).background(RoundedRectangle(cornerRadius: 16).stroke(Color.blue.opacity(0.3), lineWidth: 1)).padding(.horizontal)
+                                .onAppear { calculateGoalFromDate() }
+                            }
                         }
                     }
+                    Spacer(minLength: 50)
                 }
-                Spacer(minLength: 50)
+                .padding(.top)
             }
-            .padding(.top)
-        }
-        .scrollDismissesKeyboard(.interactively)
-        .onChange(of: currentStep) { _, newValue in
-            if newValue == 3 {
-                calculateGoalFromDate()
+            .scrollDismissesKeyboard(.interactively)
+            .onChange(of: currentStep) { _, newValue in
+                if newValue == 3 {
+                    calculateGoalFromDate()
+                }
             }
         }
-    }
     
     var finalStep: some View {
         VStack(spacing: 30) {
