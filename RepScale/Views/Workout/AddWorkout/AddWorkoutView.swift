@@ -16,11 +16,9 @@ struct AddWorkoutView: View {
     
     @State private var viewModel: AddWorkoutViewModel
     
-    // 2. State to track the live workout for autosaves
-    @State private var activeWorkout: Workout?
+    // FIX: Removed 'activeWorkout' state. The ViewModel now manages the identity of the workout.
     
     // MARK: - STABILITY FIX
-    // Using a shared focus state at the top level prevents row-level constraint conflicts
     @FocusState private var isInputFocused: Bool
     
     init(workoutToEdit: Workout?, profile: UserProfile) {
@@ -29,9 +27,6 @@ struct AddWorkoutView: View {
         
         // Initialize View Model
         _viewModel = State(initialValue: AddWorkoutViewModel(workoutToEdit: workoutToEdit))
-        
-        // Initialize local state for autosave tracking
-        _activeWorkout = State(initialValue: workoutToEdit)
     }
     
     var body: some View {
@@ -81,7 +76,8 @@ struct AddWorkoutView: View {
 
                         // Manual Save Button (Finalizes)
                         Button("Done") {
-                            viewModel.forceImmediateSave(context: modelContext, originalWorkout: activeWorkout)
+                            // FIX: Updated call signature
+                            viewModel.forceImmediateSave(context: modelContext)
                             dismiss()
                         }
                         .disabled(viewModel.selectedMuscles.isEmpty)
@@ -89,9 +85,6 @@ struct AddWorkoutView: View {
                     }
                 }
 
-                // MARK: - KEYBOARD TOOLBAR FIX
-                // Placing the keyboard toolbar here (at the NavigationStack level)
-                // ensures it remains visible even when rows are added/removed.
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("Done") {
@@ -123,7 +116,8 @@ struct AddWorkoutView: View {
             
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .background || newPhase == .inactive {
-                    viewModel.forceImmediateSave(context: modelContext, originalWorkout: activeWorkout)
+                    // FIX: Updated call signature
+                    viewModel.forceImmediateSave(context: modelContext)
                 }
             }
         }
@@ -131,9 +125,11 @@ struct AddWorkoutView: View {
     
     private func triggerDebouncedSave() {
         guard !viewModel.exercises.isEmpty else { return }
-        viewModel.scheduleAutosave(context: modelContext, originalWorkout: activeWorkout)
+        // FIX: Updated call signature
+        viewModel.scheduleAutosave(context: modelContext)
     }
 }
+// ... (Extension and Subviews remain the same)
 
 extension AddWorkoutView {
     

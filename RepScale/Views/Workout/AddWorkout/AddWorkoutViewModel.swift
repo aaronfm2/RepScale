@@ -6,6 +6,9 @@ import SwiftUI
 class AddWorkoutViewModel {
     // MARK: - Properties
     
+    // FIX: Track the workout instance inside the ViewModel
+    var currentWorkout: Workout?
+    
     var date: Date = Date()
     
     var category: String = "Push" {
@@ -47,6 +50,9 @@ class AddWorkoutViewModel {
 
     // MARK: - Initializer
     init(workoutToEdit: Workout? = nil) {
+        // FIX: Store the passed workout immediately
+        self.currentWorkout = workoutToEdit
+        
         if let workout = workoutToEdit {
             self.date = workout.date
             self.category = workout.category
@@ -78,11 +84,7 @@ class AddWorkoutViewModel {
             if let index = groups.firstIndex(where: { $0.name == exercise.name }) {
                 groups[index].exercises.append(exercise)
             } else {
-                // --- FIX STARTS HERE ---
-                // We append a NEW group to the 'groups' array.
-                // We do NOT use 'index' here because it is out of scope.
                 groups.append(ExerciseGroup(name: exercise.name, exercises: [exercise]))
-                // --- FIX ENDS HERE ---
             }
         }
         return groups
@@ -191,9 +193,8 @@ class AddWorkoutViewModel {
     
     // MARK: - Autosave Scheduling
     
-    /// Schedules a save to happen after 3 seconds. If called again within that window,
-    /// the previous timer is cancelled. This prevents the UI from stuttering on every keystroke.
-    func scheduleAutosave(context: ModelContext, originalWorkout: Workout?) {
+    /// Schedules a save to happen after 3 seconds.
+    func scheduleAutosave(context: ModelContext) {
         // 1. Cancel existing task
         autosaveTask?.cancel()
         
@@ -207,25 +208,24 @@ class AddWorkoutViewModel {
             
             // Perform save on Main Actor
             await MainActor.run {
-                _ = self.saveWorkout(context: context, originalWorkout: originalWorkout)
+                // FIX: No longer need to pass originalWorkout, ViewModel uses currentWorkout
+                _ = self.saveWorkout(context: context)
                 print("Autosave triggered via Debounce")
             }
         }
     }
     
     /// Bypasses the debounce timer and saves immediately.
-    /// Used when the user taps "Done" or the app goes to the background.
-    func forceImmediateSave(context: ModelContext, originalWorkout: Workout?) {
+    func forceImmediateSave(context: ModelContext) {
         autosaveTask?.cancel()
-        _ = saveWorkout(context: context, originalWorkout: originalWorkout)
+        _ = saveWorkout(context: context)
     }
 
     // MARK: - Core Save Function
     
-    func saveWorkout(context: ModelContext, originalWorkout: Workout?, onComplete: (() -> Void)? = nil) -> Workout? {
+    func saveWorkout(context: ModelContext, onComplete: (() -> Void)? = nil) -> Workout? {
         
         // Filter out empty exercises to prevent saving workouts with no actual data.
-        // Strength: Requires > 0 reps. Cardio: Requires > 0 distance or duration.
         let validExercises = exercises.filter { ex in
             if ex.isCardio {
                 return (ex.distance ?? 0) > 0 || (ex.duration ?? 0) > 0
@@ -234,17 +234,15 @@ class AddWorkoutViewModel {
             }
         }
         
-        // If there are no valid exercises, do not save or create the workout.
         guard !validExercises.isEmpty else {
-            // If the user tapped "Done" (onComplete provided), we still dismiss the view,
-            // but we don't persist the empty workout.
             onComplete?()
             return nil
         }
         
         let workoutToSave: Workout
         
-        if let workout = originalWorkout {
+        // FIX: Check self.currentWorkout instead of a parameter
+        if let workout = currentWorkout {
             // Update Existing
             workoutToSave = workout
             workoutToSave.date = Calendar.current.startOfDay(for: date)
@@ -260,12 +258,14 @@ class AddWorkoutViewModel {
             workoutToSave = Workout(date: date, category: category, muscleGroups: Array(selectedMuscles), note: note)
             workoutToSave.exercises = validExercises
             context.insert(workoutToSave)
+            
+            // FIX: Capture the newly created workout so future saves update this one
+            self.currentWorkout = workoutToSave
         }
         
         // Save to disk
         try? context.save()
         
-        // Call completion if provided (e.g., for the "Done" button)
         onComplete?()
         
         return workoutToSave
