@@ -281,22 +281,8 @@ struct EditExerciseRow: View {
                         Text("min")
                     }.foregroundColor(.blue)
                 } else {
+                    // SWAPPED: Weight is now first (left), Reps is second (right)
                     HStack {
-                        TextField("Reps", value: $exercise.reps, format: .number)
-                            .keyboardType(.numberPad)
-                            .focused(focusState)
-                            .frame(width: 40)
-                            .multilineTextAlignment(.trailing)
-                            .padding(4)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(5)
-                            .onChange(of: exercise.reps) { onInputChanged() }
-                        
-                        Text("reps").font(.caption).foregroundColor(.secondary)
-                        Spacer()
-                        Text("x").foregroundColor(.secondary)
-                        Spacer()
-                        
                         TextField("Weight", value: weightBinding, format: .number)
                             .keyboardType(.decimalPad)
                             .focused(focusState)
@@ -308,6 +294,22 @@ struct EditExerciseRow: View {
                             .onChange(of: exercise.weight) { onInputChanged() }
                         
                         Text(weightLabel).font(.caption).foregroundColor(.secondary)
+                        
+                        Spacer()
+                        Text("x").foregroundColor(.secondary)
+                        Spacer()
+                        
+                        TextField("Reps", value: $exercise.reps, format: .number)
+                            .keyboardType(.numberPad)
+                            .focused(focusState)
+                            .frame(width: 40)
+                            .multilineTextAlignment(.trailing)
+                            .padding(4)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(5)
+                            .onChange(of: exercise.reps) { onInputChanged() }
+                        
+                        Text("reps").font(.caption).foregroundColor(.secondary)
                     }
                 }
             }
