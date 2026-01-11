@@ -15,7 +15,8 @@ struct RepScaleApp: App {
             TemplateExerciseEntry.self,
             ExerciseDefinition.self,
             GoalPeriod.self,
-            UserProfile.self
+            UserProfile.self,
+            ProgressPhoto.self
         ])
         let modelConfiguration = ModelConfiguration(
             schema: schema,
