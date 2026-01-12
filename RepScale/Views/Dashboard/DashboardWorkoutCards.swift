@@ -176,8 +176,21 @@ struct StrengthTrackerCard: View {
     }
     
     var body: some View {
-        // 1. Data Preparation
+        // 1. Data Preparation: Get all unique exercise names
         let allExercises = Array(Set(workouts.flatMap { $0.exercises ?? [] }.map { $0.name })).sorted()
+        
+        // NEW: Calculate available reps for the currently selected exercise (All Time)
+        // This ensures the menu only shows rep counts you have actually performed.
+        let availableReps: [Int] = {
+            let targetExercise = profile.strengthGraphExercise
+            guard !targetExercise.isEmpty else { return [] }
+            
+            let allEntries = workouts.flatMap { $0.exercises ?? [] }
+            let relevantEntries = allEntries.filter { $0.name == targetExercise }
+            let uniqueReps = Set(relevantEntries.compactMap { $0.reps }.filter { $0 > 0 })
+            
+            return Array(uniqueReps).sorted()
+        }()
         
         // Filter Workouts by Time Range
         let filteredWorkouts: [Workout]
@@ -199,14 +212,10 @@ struct StrengthTrackerCard: View {
                 guard let exercises = workout.exercises else { continue }
                 for entry in exercises where entry.name == profile.strengthGraphExercise {
                     let reps = entry.reps ?? 0
-                    let matchesReps: Bool
-                    if profile.strengthGraphReps == 21 {
-                        matchesReps = reps >= 20
-                    } else {
-                        matchesReps = reps == profile.strengthGraphReps
-                    }
                     
-                    if matchesReps, let weight = entry.weight {
+                    // UPDATED: Strict match. We only graph the exact rep count selected.
+                    // (Legacy support: If user previously had '21' selected for 20+, they will need to select a new valid rep count from the menu).
+                    if reps == profile.strengthGraphReps, let weight = entry.weight {
                         let converted = weight.toUserWeight(system: profile.unitSystem)
                         if converted > maxWeightForDay {
                             maxWeightForDay = converted
@@ -243,7 +252,11 @@ struct StrengthTrackerCard: View {
                             Text("No exercises logged")
                         } else {
                             ForEach(allExercises, id: \.self) { name in
-                                Button(name) { profile.strengthGraphExercise = name }
+                                Button(name) {
+                                    profile.strengthGraphExercise = name
+                                    // Optional: Reset reps to the most common or first available when switching exercise?
+                                    // For now, we leave it; if the rep count doesn't exist for the new exercise, the graph will be empty until they pick one.
+                                }
                             }
                         }
                     } label: {
@@ -258,15 +271,18 @@ struct StrengthTrackerCard: View {
                         .foregroundColor(.blue)
                     }
                     
-                    // Reps Selector
+                    // UPDATED: Reps Selector
                     Menu {
-                        ForEach(1...20, id: \.self) { i in
-                            Button("\(i) Reps") { profile.strengthGraphReps = i }
+                        if availableReps.isEmpty {
+                            Text("No history")
+                        } else {
+                            ForEach(availableReps, id: \.self) { i in
+                                Button("\(i) Reps") { profile.strengthGraphReps = i }
+                            }
                         }
-                        Button("20+ Reps") { profile.strengthGraphReps = 21 }
                     } label: {
                         HStack(spacing: 4) {
-                            Text(profile.strengthGraphReps == 21 ? "20+ Reps" : "\(profile.strengthGraphReps) Reps")
+                            Text("\(profile.strengthGraphReps) Reps")
                             Image(systemName: "chevron.down")
                         }
                         .font(.caption).fontWeight(.medium)
@@ -302,9 +318,20 @@ struct StrengthTrackerCard: View {
                     Text("No data found")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
-                    Text("Try adjusting the filters or log this exercise.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    
+                    if availableReps.isEmpty {
+                        Text("Log this exercise to see data.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else if !availableReps.contains(profile.strengthGraphReps) {
+                        Text("You haven't performed sets of \(profile.strengthGraphReps) reps for this exercise.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("Try adjusting the time filter.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 200)
