@@ -18,10 +18,18 @@ class HealthManager: ObservableObject {
     @Published var carbsToday: Double = 0
     @Published var fatToday: Double = 0
 
-    // Expanded list of all nutrition types to read
-    private let allDietaryTypes: [HKQuantityTypeIdentifier] = [
+    // MARK: - Nutrition Type Definitions
+    
+    // 1. BASIC TYPES: Requested immediately on Log Tab
+    private let basicDietaryTypes: [HKQuantityTypeIdentifier] = [
         .dietaryEnergyConsumed,
-        .dietaryProtein, .dietaryCarbohydrates, .dietaryFatTotal,
+        .dietaryProtein,
+        .dietaryCarbohydrates,
+        .dietaryFatTotal
+    ]
+    
+    // 2. EXTENDED TYPES: Requested only when "Show All" is tapped
+    private let extendedDietaryTypes: [HKQuantityTypeIdentifier] = [
         .dietaryFatSaturated, .dietaryFatMonounsaturated, .dietaryFatPolyunsaturated,
         .dietaryCholesterol, .dietarySodium, .dietarySugar, .dietaryFiber,
         .dietaryVitaminA, .dietaryThiamin, .dietaryRiboflavin, .dietaryNiacin,
@@ -31,16 +39,24 @@ class HealthManager: ObservableObject {
         .dietaryMagnesium, .dietaryPhosphorus, .dietaryPotassium, .dietaryZinc,
         .dietaryWater, .dietaryCaffeine
     ]
+    
+    // Combined helper for fetching data (computed property)
+    private var allDietaryTypes: [HKQuantityTypeIdentifier] {
+        return basicDietaryTypes + extendedDietaryTypes
+    }
 
-    func requestAuthorization() {
-        // Start with non-dietary types
+    // MARK: - Authorization Methods
+
+    /// Stage 1: Request Weight, Calories, and Macros ONLY.
+    func requestBasicAuthorization() {
+        // Core non-dietary types
         var typesToRead: Set<HKObjectType> = [
             HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!,
             HKObjectType.quantityType(forIdentifier: .bodyMass)!
         ]
         
-        // Add all dietary types
-        for id in allDietaryTypes {
+        // Add only basic dietary types
+        for id in basicDietaryTypes {
             if let type = HKObjectType.quantityType(forIdentifier: id) {
                 typesToRead.insert(type)
             }
@@ -49,6 +65,26 @@ class HealthManager: ObservableObject {
         healthStore.requestAuthorization(toShare: nil, read: typesToRead) { success, error in
             if success {
                 self.fetchAllHealthData()
+            }
+        }
+    }
+    
+    /// Stage 2: Request everything else (Vitamins, Minerals, etc.)
+    /// Call this when the user taps "Show All Nutrition Data"
+    func requestExtendedAuthorization(completion: @escaping (Bool) -> Void = { _ in }) {
+        var typesToRead: Set<HKObjectType> = []
+        
+        for id in extendedDietaryTypes {
+            if let type = HKObjectType.quantityType(forIdentifier: id) {
+                typesToRead.insert(type)
+            }
+        }
+
+        healthStore.requestAuthorization(toShare: nil, read: typesToRead) { success, error in
+            // Refresh data regardless of success to ensure UI updates if they allowed it
+            self.fetchAllHealthData()
+            DispatchQueue.main.async {
+                completion(success)
             }
         }
     }
@@ -75,6 +111,7 @@ class HealthManager: ObservableObject {
     
     // Fetch basic Nutrition for Dashboard (Calories + Macros)
     func fetchNutrition() {
+        // Only fetch the basic types for the main dashboard/log view
         let nutritionTypes: [HKQuantityTypeIdentifier: (Double) -> Void] = [
             .dietaryEnergyConsumed: { val in self.caloriesConsumedToday = val },
             .dietaryProtein: { val in self.proteinToday = val },
@@ -106,6 +143,7 @@ class HealthManager: ObservableObject {
     /// Fetches all defined nutrition types for a specific date
     func fetchDetailedNutrition(for date: Date) async -> [NutritionItem] {
         return await withTaskGroup(of: NutritionItem?.self) { group in
+            // Iterate over ALL types (Basic + Extended)
             for identifier in allDietaryTypes {
                 group.addTask {
                     let unit = self.getPreferredUnit(for: identifier)
@@ -137,24 +175,22 @@ class HealthManager: ObservableObject {
     
     // MARK: - Weight Fetching
         
-        /// Fetches the average body mass for a specific date in kg
-        func fetchBodyMass(for date: Date) async -> Double {
-            return await withCheckedContinuation { continuation in
-                guard let type = HKQuantityType.quantityType(forIdentifier: .bodyMass) else {
-                    continuation.resume(returning: 0)
-                    return
-                }
-                
-                let predicate = getPredicate(for: date)
-                // Using discreteAverage to get a representative weight for the day if multiple samples exist
-                let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .discreteAverage) { _, result, _ in
-                    // Always fetch as kg to match internal storage
-                    let val = result?.averageQuantity()?.doubleValue(for: .gramUnit(with: .kilo)) ?? 0
-                    continuation.resume(returning: val)
-                }
-                healthStore.execute(query)
+    /// Fetches the average body mass for a specific date in kg
+    func fetchBodyMass(for date: Date) async -> Double {
+        return await withCheckedContinuation { continuation in
+            guard let type = HKQuantityType.quantityType(forIdentifier: .bodyMass) else {
+                continuation.resume(returning: 0)
+                return
             }
+            
+            let predicate = getPredicate(for: date)
+            let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .discreteAverage) { _, result, _ in
+                let val = result?.averageQuantity()?.doubleValue(for: .gramUnit(with: .kilo)) ?? 0
+                continuation.resume(returning: val)
+            }
+            healthStore.execute(query)
         }
+    }
     
     // MARK: - Historical Data Sync (Keep existing for backward compatibility)
     
@@ -190,8 +226,6 @@ class HealthManager: ObservableObject {
         }
     }
     
-    
-    
     // MARK: - Helpers
     
     private func fetchSum(for identifier: HKQuantityTypeIdentifier, unit: HKUnit, date: Date) async -> Double {
@@ -219,9 +253,9 @@ class HealthManager: ObservableObject {
     private func getPreferredUnit(for identifier: HKQuantityTypeIdentifier) -> HKUnit {
         switch identifier {
         case .dietaryEnergyConsumed: return .kilocalorie()
-        case .dietaryCholesterol, .dietarySodium, .dietaryPotassium, .dietaryCaffeine: return .gramUnit(with: .milli) // mg
-        case .dietaryVitaminA, .dietaryVitaminD, .dietaryVitaminB12, .dietaryFolate, .dietaryBiotin: return .gramUnit(with: .micro) // mcg
-        case .dietaryWater: return .literUnit(with: .milli) // mL
+        case .dietaryCholesterol, .dietarySodium, .dietaryPotassium, .dietaryCaffeine: return .gramUnit(with: .milli)
+        case .dietaryVitaminA, .dietaryVitaminD, .dietaryVitaminB12, .dietaryFolate, .dietaryBiotin: return .gramUnit(with: .micro)
+        case .dietaryWater: return .literUnit(with: .milli)
         default: return .gram()
         }
     }

@@ -561,7 +561,7 @@ struct LogListContent: View {
         deduplicateLogs()
         
         if profile.enableHealthKitSync {
-            healthManager.requestAuthorization()
+            healthManager.requestBasicAuthorization()
             healthManager.fetchAllHealthData()
         }
             

@@ -249,23 +249,29 @@ struct LogDetailView: View {
             
             Divider()
             
-            Button(action: { showingDetailedNutrition = true }) {
-                HStack {
-                    Text("See All Nutrition Data")
-                        .fontWeight(.medium)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
+            Button(action: {
+                            // UPDATE: Request extended permissions before showing the sheet
+                            healthManager.requestExtendedAuthorization { success in
+                                // This completion block runs on the main thread
+                                showingDetailedNutrition = true
+                            }
+                        }) {
+                            HStack {
+                                Text("See All Nutrition Data")
+                                    .fontWeight(.medium)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(.blue)
+                        }
+                        .padding(.top, 4)
+                    }
+                    .padding()
+                    .background(RoundedRectangle(cornerRadius: 12).fill(cardBackgroundColor))
+                    .padding(.horizontal)
                 }
-                .font(.subheadline)
-                .foregroundColor(.blue)
-            }
-            .padding(.top, 4)
-        }
-        .padding()
-        .background(RoundedRectangle(cornerRadius: 12).fill(cardBackgroundColor))
-        .padding(.horizontal)
-    }
     
     private var workoutsSection: some View {
         VStack(alignment: .leading, spacing: 15) {
