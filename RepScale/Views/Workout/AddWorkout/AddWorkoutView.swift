@@ -550,8 +550,11 @@ struct CustomExerciseForm: View {
     @State private var isCardio = false
     @State private var note = ""
     
-    @State private var saveToLibrary = false
+    @State private var saveToLibrary = true
     @State private var selectedMuscles: Set<String> = []
+    
+    // MARK: - Local Focus State
+    @FocusState private var isInputFocused: Bool
     
     var availableMuscles: [String] {
         let standard = Set(MuscleGroup.allCases.map { $0.rawValue })
@@ -566,8 +569,10 @@ struct CustomExerciseForm: View {
         Form {
             Section("New Exercise Details") {
                 TextField("Name (e.g. Burpees)", text: $name)
+                    .focused($isInputFocused)
                 Toggle("Cardio Exercise?", isOn: $isCardio)
                 TextField("Default Note (Optional)", text: $note)
+                    .focused($isInputFocused)
             }
             
             Section {
@@ -605,6 +610,18 @@ struct CustomExerciseForm: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Custom Exercise")
+        // MARK: - Keyboard Toolbar
+        .toolbar {
+            if isInputFocused {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        isInputFocused = false
+                    }
+                    .fontWeight(.bold)
+                }
+            }
+        }
     }
     
     var isInvalid: Bool {
