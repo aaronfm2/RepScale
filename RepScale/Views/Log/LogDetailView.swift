@@ -315,7 +315,10 @@ struct LogDetailView: View {
             if (w.exercises ?? []).isEmpty {
                 Text("No exercises logged.").font(.caption).italic().foregroundColor(.secondary)
             } else {
-                let grouped = groupExercises(w.exercises ?? [])
+                // FIX: Sort exercises by sortOrder before grouping
+                let sortedExercises = (w.exercises ?? []).sorted { $0.sortOrder < $1.sortOrder }
+                let grouped = groupExercises(sortedExercises)
+                
                 ForEach(grouped, id: \.name) { group in
                     VStack(alignment: .leading, spacing: 6) {
                         Text(group.name).font(.headline).foregroundColor(.primary).padding(.top, 4)

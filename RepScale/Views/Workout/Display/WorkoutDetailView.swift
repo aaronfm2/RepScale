@@ -26,8 +26,12 @@ struct WorkoutDetailView: View {
     var groupedExercises: [(name: String, sets: [ExerciseEntry])] {
         var groups: [(name: String, sets: [ExerciseEntry])] = []
         
+        // FIX: Sort exercises by the persisted sortOrder before processing
+        // This ensures the view respects the order you saved, instead of random database order.
+        let sortedExercises = (workout.exercises ?? []).sorted { $0.sortOrder < $1.sortOrder }
+        
         // Filter exercises first if a muscle filter is active
-        let relevantExercises = (workout.exercises ?? []).filter { entry in
+        let relevantExercises = sortedExercises.filter { entry in
             guard let targetMuscle = filterMuscle else { return true }
             
             // Find definition for this exercise to check muscle groups

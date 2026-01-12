@@ -9,7 +9,6 @@ final class Workout {
     var muscleGroups: [String] = []
     var note: String = ""
     
-    // FIX: Changed to Optional [ExerciseEntry]? to satisfy CloudKit requirements
     @Relationship(deleteRule: .cascade, inverse: \ExerciseEntry.workout)
     var exercises: [ExerciseEntry]? = []
     
@@ -24,8 +23,10 @@ final class Workout {
 
 @Model
 final class ExerciseEntry {
-    // 1. Add a stable UUID property
     var uuid: UUID = UUID()
+    
+    // 1. Add Sort Order Property
+    var sortOrder: Int = 0
     
     var name: String = ""
     var reps: Int?
@@ -39,7 +40,6 @@ final class ExerciseEntry {
     var workout: Workout?
     
     init(name: String, reps: Int? = nil, weight: Double? = nil, duration: Double? = nil, distance: Double? = nil, isCardio: Bool = false, note: String = "") {
-        // uuid is initialized automatically
         self.name = name
         self.reps = reps
         self.weight = weight
@@ -58,7 +58,6 @@ final class WorkoutTemplate {
     var category: String = ""
     var muscleGroups: [String] = []
     
-    // FIX: Changed to Optional [TemplateExerciseEntry]?
     @Relationship(deleteRule: .cascade, inverse: \TemplateExerciseEntry.template)
     var exercises: [TemplateExerciseEntry]? = []
     
@@ -71,6 +70,9 @@ final class WorkoutTemplate {
 
 @Model
 final class TemplateExerciseEntry {
+    // 2. Add Sort Order to Template as well
+    var sortOrder: Int = 0
+    
     var name: String = ""
     var reps: Int?
     var weight: Double?
@@ -90,5 +92,11 @@ final class TemplateExerciseEntry {
         self.distance = distance
         self.isCardio = isCardio
         self.note = note
+    }
+}
+extension Workout {
+    /// Returns exercises sorted by the persisted sortOrder
+    var sortedExercises: [ExerciseEntry] {
+        return (exercises ?? []).sorted { $0.sortOrder < $1.sortOrder }
     }
 }
