@@ -16,10 +16,9 @@ struct AddWorkoutView: View {
     
     @State private var viewModel: AddWorkoutViewModel
     
-    // FIX: Removed 'activeWorkout' state. The ViewModel now manages the identity of the workout.
-    
-    // MARK: - STABILITY FIX
-    @FocusState private var isInputFocused: Bool
+    // MARK: - FOCUS STATE
+    // This now strictly controls only the Notes field
+    @FocusState private var isNotesFocused: Bool
     
     init(workoutToEdit: Workout?, profile: UserProfile) {
         self.workoutToEdit = workoutToEdit
@@ -44,11 +43,11 @@ struct AddWorkoutView: View {
                 }
                 .listRowBackground(Color.clear)
             }
-            .ignoresSafeArea(.keyboard, edges: .bottom)
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(workoutToEdit == nil ? "Log Workout" : "Edit Workout")
             .toolbar {
                 // MARK: - Navigation Bar Items
+                // Note: We REMOVED the keyboard toolbar from here to prevent duplicates
                 
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") { dismiss() }
@@ -76,21 +75,12 @@ struct AddWorkoutView: View {
 
                         // Manual Save Button (Finalizes)
                         Button("Done") {
-                            // FIX: Updated call signature
                             viewModel.forceImmediateSave(context: modelContext)
                             dismiss()
                         }
                         .disabled(viewModel.selectedMuscles.isEmpty)
                         .bold()
                     }
-                }
-
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        isInputFocused = false
-                    }
-                    .fontWeight(.bold)
                 }
             }
             .sheet(isPresented: $viewModel.showAddExerciseSheet) {
@@ -116,7 +106,6 @@ struct AddWorkoutView: View {
             
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .background || newPhase == .inactive {
-                    // FIX: Updated call signature
                     viewModel.forceImmediateSave(context: modelContext)
                 }
             }
@@ -125,11 +114,11 @@ struct AddWorkoutView: View {
     
     private func triggerDebouncedSave() {
         guard !viewModel.exercises.isEmpty else { return }
-        // FIX: Updated call signature
         viewModel.scheduleAutosave(context: modelContext)
     }
 }
-// ... (Extension and Subviews remain the same)
+
+// MARK: - Extensions
 
 extension AddWorkoutView {
     
@@ -182,7 +171,7 @@ extension AddWorkoutView {
                                 exercise: ex,
                                 index: index,
                                 unitSystem: profile.unitSystem,
-                                focusState: $isInputFocused,
+                                // We no longer pass a global focus state here
                                 onInputChanged: { triggerDebouncedSave() }
                             )
                         }
@@ -225,9 +214,21 @@ extension AddWorkoutView {
     private var notesSection: some View {
         Section("Notes") {
             TextField("Workout notes...", text: $viewModel.note)
-                .focused($isInputFocused)
+                .focused($isNotesFocused)
                 .onChange(of: viewModel.note) {
                     triggerDebouncedSave()
+                }
+                // FIX: Attach toolbar specifically to this field
+                .toolbar {
+                    if isNotesFocused {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button("Done") {
+                                isNotesFocused = false
+                            }
+                            .fontWeight(.bold)
+                        }
+                    }
                 }
         }
     }
@@ -239,7 +240,11 @@ struct EditExerciseRow: View {
     @Bindable var exercise: ExerciseEntry
     let index: Int
     let unitSystem: String
-    var focusState: FocusState<Bool>.Binding
+    
+    // MARK: - LOCAL FOCUS STATE
+    // This controls the keyboard toolbar specifically for this row.
+    @FocusState private var isRowFocused: Bool
+    
     var onInputChanged: () -> Void
     
     var weightLabel: String { unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
@@ -265,7 +270,7 @@ struct EditExerciseRow: View {
                     HStack {
                         TextField("Dist", value: distBinding, format: .number)
                             .keyboardType(.decimalPad)
-                            .focused(focusState)
+                            .focused($isRowFocused)
                             .frame(width: 60)
                             .onChange(of: exercise.distance) { onInputChanged() }
                         
@@ -274,18 +279,17 @@ struct EditExerciseRow: View {
                         
                         TextField("Time", value: $exercise.duration, format: .number)
                             .keyboardType(.numberPad)
-                            .focused(focusState)
+                            .focused($isRowFocused)
                             .frame(width: 60)
                             .onChange(of: exercise.duration) { onInputChanged() }
                         
                         Text("min")
                     }.foregroundColor(.blue)
                 } else {
-                    // SWAPPED: Weight is now first (left), Reps is second (right)
                     HStack {
                         TextField("Weight", value: weightBinding, format: .number)
                             .keyboardType(.decimalPad)
-                            .focused(focusState)
+                            .focused($isRowFocused)
                             .frame(width: 60)
                             .multilineTextAlignment(.trailing)
                             .padding(4)
@@ -301,7 +305,7 @@ struct EditExerciseRow: View {
                         
                         TextField("Reps", value: $exercise.reps, format: .number)
                             .keyboardType(.numberPad)
-                            .focused(focusState)
+                            .focused($isRowFocused)
                             .frame(width: 40)
                             .multilineTextAlignment(.trailing)
                             .padding(4)
@@ -317,10 +321,23 @@ struct EditExerciseRow: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .padding(.leading, 60)
-                .focused(focusState)
+                .focused($isRowFocused)
                 .onChange(of: exercise.note) { onInputChanged() }
         }
         .padding(.vertical, 2)
+        // MARK: - LOCAL TOOLBAR
+        // Shows "Done" only when THIS row is active.
+        .toolbar {
+            if isRowFocused {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        isRowFocused = false
+                    }
+                    .fontWeight(.bold)
+                }
+            }
+        }
     }
 }
 
@@ -586,7 +603,6 @@ struct CustomExerciseForm: View {
             }
             .disabled(isInvalid)
         }
-        .ignoresSafeArea(.keyboard, edges: .bottom)
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Custom Exercise")
     }

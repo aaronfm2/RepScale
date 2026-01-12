@@ -20,6 +20,9 @@ struct WeightEntryDetailView: View {
     @State private var showDeleteConfirmation = false
     @State private var photoToDelete: ProgressPhoto?
     
+    // MARK: - FIX: Local Focus State for Keyboard Toolbar
+    @FocusState private var isInputFocused: Bool
+    
     let tags = ["Full Body", "Upper Body", "Arms", "Chest", "Back", "Shoulders", "Legs"]
     var weightLabel: String { profile.unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
 
@@ -38,9 +41,11 @@ struct WeightEntryDetailView: View {
                     TextField("Weight", value: $entry.weight, format: .number)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
+                        .focused($isInputFocused) // FIX: Bind Focus
                     Text(weightLabel).foregroundColor(.secondary)
                 }
                 TextField("Note", text: $entry.note, axis: .vertical)
+                    .focused($isInputFocused) // FIX: Bind Focus
             }
             
             Section("Progress Photos") {
@@ -83,15 +88,24 @@ struct WeightEntryDetailView: View {
                 }
             }
         }
-        // --- FIX START: Prevents "Blank Screen" Glitch ---
-        .ignoresSafeArea(.keyboard, edges: .bottom)
         .scrollDismissesKeyboard(.interactively)
-        // --- FIX END ---
         // --- Added: Apply Background Color ---
         .scrollContentBackground(.hidden)
         .background(appBackgroundColor)
         // ------------------------------------
         .navigationTitle("Edit Log")
+        // MARK: - FIX: Keyboard Toolbar
+        .toolbar {
+            if isInputFocused {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        isInputFocused = false
+                    }
+                    .fontWeight(.bold)
+                }
+            }
+        }
         
         // --- 1. Selection Dialog ---
         .confirmationDialog("Add Photo", isPresented: $showImageOptions) {

@@ -4,6 +4,8 @@ import SwiftData
 struct GoalConfigurationView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.modelContext) private var modelContext
+    
+    // MARK: - FIX: Focus State
     @FocusState private var isInputFocused: Bool
     
     var profile: UserProfile
@@ -40,7 +42,7 @@ struct GoalConfigurationView: View {
     var body: some View {
         NavigationStack {
             Form {
-                // Goal Type & Current Weight Sections (Same as before)
+                // Goal Type & Current Weight Sections
                 Section(header: Text("Goal Configuration")) {
                     Picker("Goal Type", selection: $selectedGoalType) {
                         ForEach(GoalType.allCases, id: \.self) { type in Text(type.rawValue).tag(type) }
@@ -129,11 +131,23 @@ struct GoalConfigurationView: View {
                     )
                 }
             }
-            .ignoresSafeArea(.keyboard, edges: .bottom).scrollDismissesKeyboard(.interactively)
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Reconfigure Goal")
+            // MARK: - FIX: Keyboard Toolbar
             .toolbar {
-                ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Done") { isInputFocused = false } }
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                
+                if isInputFocused {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") {
+                            isInputFocused = false
+                        }
+                        .fontWeight(.bold)
+                    }
+                }
             }
             .onAppear { loadFromProfile() }
         }
@@ -152,7 +166,7 @@ struct GoalConfigurationView: View {
         
         switch maintenanceSource {
         case 0:
-            // NEW: Mifflin-St Jeor Calculation using Profile data
+            // Mifflin-St Jeor Calculation using Profile data
             let age = Double(profile.age)
             let height = profile.height
             let activity = ActivityLevel(rawValue: profile.activityLevel) ?? .moderatelyActive
@@ -170,7 +184,7 @@ struct GoalConfigurationView: View {
             break
         }
         
-        // Rest of calculation logic (Unchanged)
+        // Rest of calculation logic
         if selectedGoalType == .maintenance {
             dailyGoal = maintenanceDisplay
             calculatedDeficit = 0
@@ -203,7 +217,6 @@ struct GoalConfigurationView: View {
     }
     
     private func save() {
-        // (Save logic identical to previous file, just updating profile values)
         let tWeightStored: Double
         if selectedGoalType == .maintenance { tWeightStored = latestWeightKg ?? 0.0 }
         else { guard let t = targetWeight else { return }; tWeightStored = t.toStoredWeight(system: profile.unitSystem) }

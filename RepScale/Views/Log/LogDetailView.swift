@@ -57,13 +57,10 @@ struct LogDetailView: View {
                 
                 notesSection
                 
-                // --- FIX: Manual Spacer for Keyboard ---
-                Color.clear.frame(height: 400)
             }
             .padding(.bottom, 30)
         }
         .background(appBackgroundColor)
-        .ignoresSafeArea(.keyboard, edges: .bottom)
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Daily Summary")
         .navigationBarTitleDisplayMode(.inline)
@@ -85,6 +82,8 @@ struct LogDetailView: View {
                 }
             }
             
+            // MARK: - FIX: Keyboard Toolbar
+            // This button uses a global dismiss action to close the keyboard for the notes section.
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("Done") {
@@ -388,6 +387,9 @@ struct EditOverridesSheet: View {
     @State private var editedCarbs: Int = 0
     @State private var editedFat: Int = 0
     
+    // MARK: - FIX: Focus State for Edit Sheet
+    @FocusState private var isInputFocused: Bool
+    
     var body: some View {
         NavigationStack {
             Form {
@@ -397,33 +399,49 @@ struct EditOverridesSheet: View {
                         Spacer()
                         TextField("0", value: $editedCalories, format: .number)
                             .keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                            .focused($isInputFocused)
                     }
                     HStack {
                         Text("Protein (+)")
                         Spacer()
                         TextField("0", value: $editedProtein, format: .number)
                             .keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                            .focused($isInputFocused)
                     }
                     HStack {
                         Text("Carbs (+)")
                         Spacer()
                         TextField("0", value: $editedCarbs, format: .number)
                             .keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                            .focused($isInputFocused)
                     }
                     HStack {
                         Text("Fat (+)")
                         Spacer()
                         TextField("0", value: $editedFat, format: .number)
                             .keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                            .focused($isInputFocused)
                     }
                 }
                 Section(footer: Text("Adjusting these values updates the Total instantly. HealthKit data remains the baseline.")) { }
             }
             .navigationTitle("Edit Manual Entries")
             .toolbar {
-                Button("Done") {
-                    saveChanges()
-                    dismiss()
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        saveChanges()
+                        dismiss()
+                    }
+                }
+                
+                if isInputFocused {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") {
+                            isInputFocused = false
+                        }
+                        .fontWeight(.bold)
+                    }
                 }
             }
             .onAppear {

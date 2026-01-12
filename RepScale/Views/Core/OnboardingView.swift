@@ -152,11 +152,17 @@ struct OnboardingView: View {
         .preferredColorScheme(isDarkMode ? .dark : .light)
         .simultaneousGesture(TapGesture().onEnded { _ in
             hideKeyboard() })
-        .ignoresSafeArea(.keyboard, edges: .bottom)
+        // MARK: - FIX: Keyboard Toolbar
         .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { hideKeyboard() }.fontWeight(.bold).foregroundColor(.blue)
+            if isInputFocused {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        isInputFocused = false
+                    }
+                    .fontWeight(.bold)
+                    .foregroundColor(.blue)
+                }
             }
         }
     }
@@ -578,7 +584,7 @@ struct OnboardingView: View {
     func estimateMaintenance() {
         guard let cWeight = currentWeight,
               let cHeight = currentHeight else { return }
-              
+            
         let weightKg = toKg(cWeight)
         
         // Mifflin-St Jeor Equation
@@ -668,7 +674,7 @@ struct OnboardingView: View {
         DefaultExercises.seed(context: modelContext)
         let firstEntry = WeightEntry(date: Date(), weight: storedCurrentWeightKg, note: "")
         modelContext.insert(firstEntry)
-              
+            
         dataManager.startNewGoalPeriod(
             goalType: goalType.rawValue,
             startWeight: storedCurrentWeightKg,

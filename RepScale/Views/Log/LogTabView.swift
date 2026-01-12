@@ -433,7 +433,6 @@ struct LogListContent: View {
                 }
                 .listRowBackground(Color.clear)
             }
-            .ignoresSafeArea(.keyboard, edges: .bottom)
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Log Details")
             .toolbar {
@@ -444,12 +443,15 @@ struct LogListContent: View {
                     Button("Save") { saveLog() }
                 }
                 
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        focusedField = nil
+                // MARK: - FIX: Conditional Keyboard Toolbar
+                if focusedField != nil {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") {
+                            focusedField = nil
+                        }
+                        .fontWeight(.bold)
                     }
-                    .bold()
                 }
             }
         }

@@ -23,6 +23,9 @@ struct SettingsView: View {
     // Local state for Height UI to prevent drift
     @State private var selectedHeightUnit: UnitSystem = .metric
     
+    // MARK: - FIX: Local Focus State
+    @FocusState private var isInputFocused: Bool
+    
     var weightLabel: String { profile.unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
     
     var goalColor: Color {
@@ -98,18 +101,16 @@ struct SettingsView: View {
                                     .keyboardType(.numberPad)
                                     .multilineTextAlignment(.trailing)
                                     .frame(width: 80)
+                                    .focused($isInputFocused)
                                 Text("cm").foregroundColor(.secondary)
                             } else {
-                                // Smart bindings to prevent drift:
-                                // Changes only propagate to 'profile.height' if the user edits these fields.
-                                // Reading does not cause a write-back of rounded values.
+                                // Smart bindings to prevent drift
                                 let ftBinding = Binding<Int?>(
                                     get: {
                                         let totalInches = profile.height / 2.54
                                         return Int(totalInches / 12)
                                     },
                                     set: { newFt in
-                                        // Combine newFt with current Inches
                                         let currentTotalInches = profile.height / 2.54
                                         let currentIn = Int(currentTotalInches.truncatingRemainder(dividingBy: 12))
                                         let inches = Double((newFt ?? 0) * 12 + currentIn)
@@ -122,7 +123,6 @@ struct SettingsView: View {
                                         return Int(totalInches.truncatingRemainder(dividingBy: 12))
                                     },
                                     set: { newIn in
-                                        // Combine current Feet with newIn
                                         let currentTotalInches = profile.height / 2.54
                                         let currentFt = Int(currentTotalInches / 12)
                                         let inches = Double(currentFt * 12 + (newIn ?? 0))
@@ -134,12 +134,14 @@ struct SettingsView: View {
                                     .keyboardType(.numberPad)
                                     .multilineTextAlignment(.trailing)
                                     .frame(width: 50)
+                                    .focused($isInputFocused)
                                 Text("ft").foregroundColor(.secondary)
                                 
                                 TextField("in", value: inBinding, format: .number)
                                     .keyboardType(.numberPad)
                                     .multilineTextAlignment(.trailing)
                                     .frame(width: 50)
+                                    .focused($isInputFocused)
                                 Text("in").foregroundColor(.secondary)
                             }
                         }
@@ -211,7 +213,11 @@ struct SettingsView: View {
                             HStack {
                                 Label("Weight Tolerance", systemImage: "arrow.left.and.right").foregroundColor(.primary)
                                 Spacer()
-                                TextField("0.0", value: toleranceBinding, format: .number).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 60)
+                                TextField("0.0", value: toleranceBinding, format: .number)
+                                    .keyboardType(.decimalPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .frame(width: 60)
+                                    .focused($isInputFocused)
                                 Text(weightLabel).foregroundColor(.secondary)
                             }
                         }
@@ -240,9 +246,36 @@ struct SettingsView: View {
                         }
                     }
                 } header: { Text("Community") }
+                
+                // MARK: - FIX: Spacer to enable Swipe-to-Dismiss
+                // This empty section ensures there is always enough scrollable content
+                // so that the interactive keyboard dismissal gesture works.
+                Section {
+                    Color.clear.frame(height: 50)
+                }
+                .listRowBackground(Color.clear)
             }
             .navigationTitle("Settings")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            // Allows swipe down to dismiss keyboard
+            .scrollDismissesKeyboard(.interactively)
+            
+            // MARK: - FIX: Separated Toolbars
+            // 1. Navigation Bar items
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            // 2. Keyboard Toolbar (Unconditional)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        isInputFocused = false
+                    }
+                    .fontWeight(.bold)
+                }
+            }
             .sheet(isPresented: $showingReconfigureGoal) {
                 GoalConfigurationView(profile: profile, appEstimatedMaintenance: estimatedMaintenance, latestWeightKg: currentWeight)
             }

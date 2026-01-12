@@ -98,6 +98,8 @@ struct WeightListContent: View {
     @State private var newWeight: String = ""
     @State private var newNote: String = ""
     @State private var selectedDate: Date = Date()
+    
+    // MARK: - Local Focus State for Add Sheet
     @FocusState private var isInputFocused: Bool
 
     private var dataManager: DataManager {
@@ -278,6 +280,7 @@ struct WeightListContent: View {
                         }
                         Section {
                             TextField("Optional Note", text: $newNote)
+                                .focused($isInputFocused)
                         }
                         Section {
                             Button("Save Entry") { saveWeight() }
@@ -286,18 +289,21 @@ struct WeightListContent: View {
                                 .disabled(newWeight.isEmpty)
                         }
                     }
-                    .ignoresSafeArea(.keyboard, edges: .bottom)
                     .scrollDismissesKeyboard(.interactively)
                     .navigationTitle("Log Weight")
                     .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { showingAddWeight = false }
+                        }
+                        
+                        // MARK: - FIX: Keyboard Toolbar for Add Sheet
+                        // Removed the 'if isInputFocused' check to prevent disappearance issues
                         ToolbarItemGroup(placement: .keyboard) {
                             Spacer()
                             Button("Done") {
-                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                                isInputFocused = false
                             }
-                        }
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Cancel") { showingAddWeight = false }
+                            .fontWeight(.bold)
                         }
                     }
                 }
@@ -382,14 +388,14 @@ struct WeightListContent: View {
         
         // 1. Started (Left)
         if let latestStart = allGoalPeriods.first(where: { Calendar.current.isDate($0.startDate, inSameDayAs: date) }) {
-             events.append("\(latestStart.goalType) Goal Started")
+            events.append("\(latestStart.goalType) Goal Started")
         }
         
         // 2. Ended (Right)
         if let significantEnd = allGoalPeriods.first(where: { p in
             guard let end = p.endDate else { return false }
             return Calendar.current.isDate(end, inSameDayAs: date) &&
-                   !Calendar.current.isDate(p.startDate, inSameDayAs: date)
+                !Calendar.current.isDate(p.startDate, inSameDayAs: date)
         }) {
             events.append("\(significantEnd.goalType) Goal Ended")
         }
@@ -443,6 +449,9 @@ struct EditWeightView: View {
     @State private var editWeightStr: String
     @State private var editNote: String
     
+    // MARK: - FIX: Local Focus State for Edit Sheet
+    @FocusState private var isInputFocused: Bool
+    
     init(entry: WeightEntry, unitSystem: String, weightLabel: String, onSave: @escaping (Date, Double, String) -> Void) {
         self.entry = entry
         self.unitSystem = unitSystem
@@ -471,12 +480,14 @@ struct EditWeightView: View {
                         TextField("0.0", text: $editWeightStr)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .focused($isInputFocused) // FIX: Bind Focus
                         Text(weightLabel).foregroundColor(.secondary)
                     }
                 }
                 
                 Section(header: Text("Note")) {
                     TextField("Optional Note", text: $editNote)
+                        .focused($isInputFocused) // FIX: Bind Focus
                 }
                 
                 Section {
@@ -491,18 +502,21 @@ struct EditWeightView: View {
                     .frame(maxWidth: .infinity)
                 }
             }
-            .ignoresSafeArea(.keyboard, edges: .bottom)
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Edit Entry")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+                
+                // MARK: - FIX: Keyboard Toolbar for Edit Sheet
+                // Removed the 'if isInputFocused' check to prevent disappearance issues
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("Done") {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        isInputFocused = false
                     }
+                    .fontWeight(.bold)
                 }
             }
         }

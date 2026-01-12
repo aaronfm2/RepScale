@@ -457,6 +457,10 @@ struct MuscleSelectionView: View {
     @Bindable var profile: UserProfile
     @Environment(\.dismiss) var dismiss
     @State private var newMuscleName: String = ""
+    
+    // MARK: - FIX: Local Focus State for Keyboard Toolbar
+    @FocusState private var isInputFocused: Bool
+    
     var activeMuscles: Set<String> { Set(profile.trackedMuscles.components(separatedBy: ",").filter { !$0.isEmpty }) }
     var customMusclesList: [String] {
         let savedCustom = profile.customMuscles.components(separatedBy: ",")
@@ -465,12 +469,16 @@ struct MuscleSelectionView: View {
         let combined = Set(savedCustom + active).subtracting(standard)
         return Array(combined).filter { !$0.isEmpty }.sorted()
     }
+    
     var body: some View {
         NavigationStack {
             List {
                 Section("Add Custom Muscle") {
                     HStack {
-                        TextField("Muscle Name (e.g. Forearms)", text: $newMuscleName).textInputAutocapitalization(.words)
+                        TextField("Muscle Name (e.g. Forearms)", text: $newMuscleName)
+                            .textInputAutocapitalization(.words)
+                            .focused($isInputFocused) // FIX: Bind Focus
+                        
                         Button(action: addMuscle) { Text("Add").fontWeight(.bold) }
                         .disabled(newMuscleName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
@@ -499,8 +507,24 @@ struct MuscleSelectionView: View {
                     }
                 }
             }
-            .navigationTitle("Track Muscles").toolbar { Button("Done") { dismiss() } }
-            .ignoresSafeArea(.keyboard, edges: .bottom).scrollDismissesKeyboard(.interactively)
+            .navigationTitle("Track Muscles")
+            // MARK: - FIX: Keyboard Toolbar + Navigation Bar Button
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+                
+                if isInputFocused {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") {
+                            isInputFocused = false
+                        }
+                        .fontWeight(.bold)
+                    }
+                }
+            }
+            .scrollDismissesKeyboard(.interactively)
         }
     }
     func addMuscle() {

@@ -95,6 +95,9 @@ struct ExerciseDefinitionSheet: View {
     @State private var isCardio = false
     @State private var selectedMuscles: Set<String> = []
     
+    // MARK: - FIX: Local Focus State for Keyboard Toolbar
+    @FocusState private var isInputFocused: Bool
+    
     // UPDATED: Combine Standard + Custom + Tracked muscles
     var availableMuscles: [String] {
         let standard = Set(MuscleGroup.allCases.map { $0.rawValue })
@@ -123,6 +126,7 @@ struct ExerciseDefinitionSheet: View {
             Form {
                 Section("Exercise Details") {
                     TextField("Name (e.g. Bench Press)", text: $name)
+                        .focused($isInputFocused) // FIX: Bind focus
                     Toggle("Is Cardio?", isOn: $isCardio)
                 }
                 
@@ -147,7 +151,6 @@ struct ExerciseDefinitionSheet: View {
                     }
                 }
             }
-            .ignoresSafeArea(.keyboard, edges: .bottom)
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(exerciseToEdit == nil ? "New Exercise" : "Edit Exercise")
             .toolbar {
@@ -159,6 +162,17 @@ struct ExerciseDefinitionSheet: View {
                         save()
                     }
                     .disabled(name.isEmpty)
+                }
+                
+                // MARK: - FIX: Keyboard Toolbar
+                if isInputFocused {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") {
+                            isInputFocused = false
+                        }
+                        .fontWeight(.bold)
+                    }
                 }
             }
         }
