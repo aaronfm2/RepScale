@@ -207,146 +207,137 @@ struct OnboardingView: View {
             VStack(spacing: 24) {
                 headerText(title: "Tell us about yourself", subtitle: "We use this to calculate your maintenance calories.")
                 
-                // Units
-                HStack(spacing: 0) {
-                    ForEach(UnitSystem.allCases, id: \.self) { system in
-                        Button(action: {
-                            withAnimation {
-                                unitSystem = system
-                                // Sync height unit only if it hasn't been explicitly toggled?
-                                // Or just let them default together but change separately.
-                                // Let's keep height unit separate as requested.
-                            }
-                        }) {
-                            Text(system.rawValue)
-                                .font(.subheadline).fontWeight(.medium)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background(unitSystem == system ? Color.blue : Color.clear)
-                                .foregroundColor(unitSystem == system ? .white : .primary)
-                                .contentShape(Rectangle())
+                // 1. Units & Weight (Primary Action)
+                VStack(spacing: 16) {
+                    // Unit Toggle
+                    Picker("Unit System", selection: $unitSystem) {
+                        ForEach(UnitSystem.allCases, id: \.self) { system in
+                            Text(system.rawValue).tag(system)
                         }
-                        .buttonStyle(.plain)
                     }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    
+                    // Weight Input (Hero)
+                    VStack(spacing: 8) {
+                        Text("Current Weight").font(.headline).foregroundColor(.secondary)
+                        HStack(alignment: .firstTextBaseline, spacing: 5) {
+                            TextField("0", value: $currentWeight, format: .number)
+                                .keyboardType(.decimalPad)
+                                .font(.system(size: 60, weight: .bold, design: .rounded))
+                                .multilineTextAlignment(.center)
+                                .frame(width: 150)
+                                .focused($isInputFocused)
+                            Text(unitLabel).font(.title2).fontWeight(.semibold).foregroundColor(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                    .background(RoundedRectangle(cornerRadius: 20).fill(Color.gray.opacity(0.1)))
+                    .padding(.horizontal)
                 }
-                .background(Color.gray.opacity(0.15))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .padding(.horizontal)
                 
-                // Gender
+                // 2. Gender
                 HStack(spacing: 16) {
                     selectionCard(title: "Male", icon: "figure.stand", isSelected: gender == .male) { gender = .male }
                     selectionCard(title: "Female", icon: "figure.stand.dress", isSelected: gender == .female) { gender = .female }
                 }
                 .padding(.horizontal)
                 
-                // Grid for Inputs
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                    
-                    // Age (Date of Birth)
-                    VStack(alignment: .leading) {
-                        Text("Date of Birth").font(.caption).foregroundColor(.secondary)
-                        DatePicker("", selection: $dateOfBirth, displayedComponents: .date)
-                            .labelsHidden()
-                            .datePickerStyle(.compact)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 6)
-                            .padding(.horizontal)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(12)
-                    }
-                    
-                    // Height
-                    VStack(alignment: .leading) {
-                        HStack {
-                            Text("Height").font(.caption).foregroundColor(.secondary)
-                            Spacer()
-                            // Independent Toggle
-                            Picker("Height Unit", selection: $heightUnit) {
-                                Text("cm").tag(UnitSystem.metric)
-                                Text("ft/in").tag(UnitSystem.imperial)
-                            }
-                            .pickerStyle(.segmented)
-                            .frame(width: 80)
-                            .scaleEffect(0.8)
-                            .onChange(of: heightUnit) { oldVal, newVal in
-                                // Drift Prevention: Only convert display values when entering the mode.
-                                if newVal == .imperial {
-                                    if let cm = currentHeight {
-                                        let totalInches = cm / 2.54
-                                        heightFt = Int(totalInches / 12)
-                                        heightIn = Int(totalInches.truncatingRemainder(dividingBy: 12))
-                                    }
-                                }
-                                // When switching back to metric, we DO NOT auto-update 'currentHeight' from ft/in
-                                // unless the user edited them. This keeps '180' as '180' even if 5'11" is slightly off.
-                            }
+                // 3. Stats Rows (Height & Age)
+                VStack(spacing: 12) {
+                    // Height Row
+                    HStack {
+                        HStack(spacing: 8) {
+                            Image(systemName: "ruler.fill").foregroundColor(.blue)
+                            Text("Height").fontWeight(.medium)
                         }
                         
+                        Spacer()
+                        
                         if heightUnit == .metric {
-                            HStack {
-                                TextField("cm", value: $currentHeight, format: .number)
+                            HStack(spacing: 4) {
+                                TextField("0", value: $currentHeight, format: .number)
                                     .keyboardType(.numberPad)
-                                Text("cm").foregroundColor(.secondary)
+                                    .multilineTextAlignment(.trailing)
+                                    .frame(width: 60)
+                                Text("cm")
+                                    .foregroundColor(.secondary)
+                                    .fixedSize() // Prevents wrapping
                             }
-                            .padding()
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(12)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .background(Color.gray.opacity(0.15))
+                            .cornerRadius(8)
                             .focused($isInputFocused)
                         } else {
-                            HStack {
-                                TextField("ft", value: $heightFt, format: .number)
-                                    .keyboardType(.numberPad)
-                                    .onChange(of: heightFt) { _, _ in updateHeightFromImperial() }
+                            HStack(spacing: 4) {
+                                TextField("0", value: $heightFt, format: .number)
+                                    .keyboardType(.numberPad).frame(width: 30).multilineTextAlignment(.center)
                                 Text("'")
-                                TextField("in", value: $heightIn, format: .number)
-                                    .keyboardType(.numberPad)
-                                    .onChange(of: heightIn) { _, _ in updateHeightFromImperial() }
+                                    .fixedSize()
+                                TextField("0", value: $heightIn, format: .number)
+                                    .keyboardType(.numberPad).frame(width: 30).multilineTextAlignment(.center)
                                 Text("\"")
+                                    .fixedSize()
                             }
-                            .padding()
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(12)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .background(Color.gray.opacity(0.15))
+                            .cornerRadius(8)
                             .focused($isInputFocused)
+                            .onChange(of: heightFt) { _, _ in updateHeightFromImperial() }
+                            .onChange(of: heightIn) { _, _ in updateHeightFromImperial() }
+                        }
+                        
+                        // Unit Toggle Mini
+                        Button(action: {
+                            withAnimation {
+                                heightUnit = (heightUnit == .metric) ? .imperial : .metric
+                            }
+                        }) {
+                            Text(heightUnit == .metric ? "ft/in" : "cm")
+                                .font(.caption).bold()
+                                .foregroundColor(.blue)
+                                .padding(6)
+                                .background(Color.blue.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
                         }
                     }
+                    .padding()
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(16)
+                    
+                    // Age Row (Compact Picker)
+                    OnboardingBirthdayPicker(date: $dateOfBirth)
                 }
                 .padding(.horizontal)
                 
-                // Activity Level
+                // 4. Activity Level
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Activity Level").font(.headline)
+                    HStack {
+                        Image(systemName: "flame.fill").foregroundColor(.orange)
+                        Text("Activity Level").font(.headline)
+                        Spacer()
+                    }
+                    
                     Picker("Activity", selection: $activityLevel) {
                         ForEach(ActivityLevel.allCases, id: \.self) { level in
                             Text(level.rawValue).tag(level)
                         }
                     }
-                    .pickerStyle(.menu)
+                    .pickerStyle(.menu) // Menu style saves space
+                    .padding(.vertical, 4)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(12)
                     
                     Text(activityLevel.description)
                         .font(.caption).foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .padding()
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(16)
                 .padding(.horizontal)
-                
-                // Weight Input
-                VStack(spacing: 10) {
-                    Text("Current Weight").font(.headline).foregroundColor(.secondary)
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        TextField("0", value: $currentWeight, format: .number)
-                            .keyboardType(.decimalPad)
-                            .font(.system(size: 60, weight: .bold, design: .rounded))
-                            .multilineTextAlignment(.center)
-                            .frame(width: 150)
-                            .focused($isInputFocused)
-                        Text(unitLabel).font(.title2).fontWeight(.semibold).foregroundColor(.secondary)
-                    }
-                    .padding()
-                    .background(RoundedRectangle(cornerRadius: 20).fill(Color.gray.opacity(0.1)))
-                }
                 
                 Spacer(minLength: 50)
             }
@@ -457,23 +448,10 @@ struct OnboardingView: View {
                             }
                         } else {
                             VStack(spacing: 16) {
-                                // MARK: - UPDATED DATE PICKER
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Goal Deadline").font(.headline)
-                                    
-                                    // Changed to match Date of Birth style
-                                    DatePicker("", selection: $targetDate, in: Date()..., displayedComponents: .date)
-                                        .labelsHidden()
-                                        .datePickerStyle(.compact)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(.vertical, 6)
-                                        .padding(.horizontal)
-                                        .background(Color.gray.opacity(0.1))
-                                        .cornerRadius(12)
-                                        .onChange(of: targetDate) { _, _ in calculateGoalFromDate() }
-                                        .onChange(of: maintenanceInput) { _, _ in calculateGoalFromDate() }
-                                }
-                                .padding(.horizontal)
+                                // MARK: - UPDATED DATE PICKER (Row Style, no tap conflict)
+                                OnboardingCalendarPicker(title: "Goal Deadline", date: $targetDate)
+                                    .onChange(of: targetDate) { _, _ in calculateGoalFromDate() }
+                                    .onChange(of: maintenanceInput) { _, _ in calculateGoalFromDate() }
                                 
                                 VStack(spacing: 16) {
                                     Text("Recommended Plan").font(.headline)
@@ -704,5 +682,55 @@ struct OnboardingView: View {
         withAnimation {
             isOnboardingCompleted = true
         }
+    }
+}
+
+// MARK: - New UI Components
+
+// Updated: Compact style to save space
+struct OnboardingBirthdayPicker: View {
+    @Binding var date: Date
+    
+    var body: some View {
+        HStack {
+            Image(systemName: "birthday.cake.fill")
+                .foregroundColor(.blue)
+            Text("Date of Birth")
+                .fontWeight(.medium)
+            
+            Spacer()
+            
+            DatePicker("", selection: $date, displayedComponents: .date)
+                .datePickerStyle(.compact)
+                .labelsHidden()
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(16)
+    }
+}
+
+// Updated: Changed to Compact Row Style (avoids tap gesture conflicts)
+struct OnboardingCalendarPicker: View {
+    var title: String = "Start Date"
+    @Binding var date: Date
+    
+    var body: some View {
+        HStack {
+            Image(systemName: "calendar")
+                .foregroundColor(.blue)
+            Text(title)
+                .fontWeight(.medium)
+            
+            Spacer()
+            
+            DatePicker("", selection: $date, in: Date()..., displayedComponents: .date)
+                .datePickerStyle(.compact)
+                .labelsHidden()
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(16)
+        .padding(.horizontal)
     }
 }
