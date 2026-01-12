@@ -18,7 +18,6 @@ struct SettingsView: View {
     @State private var isExporting = false
     @State private var exportURL: URL?
     @State private var showingShareSheet = false
-    @State private var showingResetAlert = false
     @State private var showingRestartAlert = false
     
     // Local state for Height UI to prevent drift
@@ -241,21 +240,6 @@ struct SettingsView: View {
                         }
                     }
                 } header: { Text("Community") }
-                
-                // MARK: - Section 7: Debug / Development
-                Section(header: Text("Debug")) {
-                    Toggle("Tutorial Completed", isOn: $hasSeenAppTutorial).tint(.blue)
-                    Button("Restart Onboarding (Keep Data)") { showingRestartAlert = true }.foregroundColor(.orange)
-                        .alert("Restart Onboarding?", isPresented: $showingRestartAlert) {
-                            Button("Cancel", role: .cancel) { }
-                            Button("Restart", role: .none) { isOnboardingCompleted = false }
-                        } message: { Text("This will take you back to the welcome screen WITHOUT deleting your data.") }
-                    Button("Reset Onboarding (Delete Profile)") { showingResetAlert = true }.foregroundColor(.red)
-                        .alert("Reset Onboarding?", isPresented: $showingResetAlert) {
-                            Button("Cancel", role: .cancel) { }
-                            Button("Reset", role: .destructive) { deleteProfileAndReset() }
-                        } message: { Text("This will delete ALL profiles and reset the app state.") }
-                }
             }
             .navigationTitle("Settings")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
@@ -275,13 +259,7 @@ struct SettingsView: View {
         }
     }
     
-    // MARK: - Reset & Export Logic
-    private func deleteProfileAndReset() {
-        try? modelContext.delete(model: UserProfile.self)
-        hasSeenAppTutorial = false
-        isOnboardingCompleted = false
-        try? modelContext.save()
-    }
+    // MARK: - Export Logic
     
     private func exportData() {
         isExporting = true
