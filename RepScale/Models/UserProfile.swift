@@ -32,6 +32,12 @@ final class UserProfile {
     var enableCaloriesBurned: Bool = true
     var enableHealthKitSync: Bool = true
     
+    // MARK: - Tutorial State (Synced)
+    var hasSeenDashboardTutorial: Bool = false
+    var hasSeenLogsTutorial: Bool = false
+    var hasSeenWorkoutsTutorial: Bool = false
+    var hasSeenWeightTutorial: Bool = false
+    
     // MARK: - Dashboard Customization
     var dashboardLayoutJSON: String = ""
     var workoutTimeRange: String = "30 Days"

@@ -5,12 +5,6 @@ struct MainTabView: View {
     // --- CLOUD SYNC: Profile passed from RootView ---
     @Bindable var profile: UserProfile
     
-    // --- LOCAL STATE: Per-tab tutorial status ---
-    @AppStorage("hasSeenDashboardTutorial") private var hasSeenDashboardTutorial: Bool = false
-    @AppStorage("hasSeenLogsTutorial") private var hasSeenLogsTutorial: Bool = false
-    @AppStorage("hasSeenWorkoutsTutorial") private var hasSeenWorkoutsTutorial: Bool = false
-    @AppStorage("hasSeenWeightTutorial") private var hasSeenWeightTutorial: Bool = false
-    
     // Tracks the step index for the CURRENT tab's tutorial
     @State private var currentStepIndex = 0
     @State private var selectedTab = 0
@@ -114,10 +108,10 @@ struct MainTabView: View {
         if currentTabSteps.isEmpty { return false }
         
         switch selectedTab {
-        case 0: return !hasSeenDashboardTutorial
-        case 1: return !hasSeenLogsTutorial
-        case 2: return !hasSeenWorkoutsTutorial
-        case 3: return !hasSeenWeightTutorial
+        case 0: return !profile.hasSeenDashboardTutorial
+        case 1: return !profile.hasSeenLogsTutorial
+        case 2: return !profile.hasSeenWorkoutsTutorial
+        case 3: return !profile.hasSeenWeightTutorial
         default: return false
         }
     }
@@ -185,10 +179,10 @@ struct MainTabView: View {
     
     private func markCurrentTabAsSeen() {
         switch selectedTab {
-        case 0: hasSeenDashboardTutorial = true
-        case 1: hasSeenLogsTutorial = true
-        case 2: hasSeenWorkoutsTutorial = true
-        case 3: hasSeenWeightTutorial = true
+        case 0: profile.hasSeenDashboardTutorial = true
+        case 1: profile.hasSeenLogsTutorial = true
+        case 2: profile.hasSeenWorkoutsTutorial = true
+        case 3: profile.hasSeenWeightTutorial = true
         default: break
         }
     }
