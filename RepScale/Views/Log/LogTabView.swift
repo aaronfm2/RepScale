@@ -236,17 +236,6 @@ struct LogListContent: View {
                             Image(systemName: "line.3.horizontal.decrease.circle")
                         }
                         
-                        if profile.enableHealthKitSync {
-                            Button(action: refreshLast365Days) {
-                                if isRefreshingHistory {
-                                    ProgressView()
-                                } else {
-                                    Image(systemName: "arrow.clockwise")
-                                }
-                            }
-                            .disabled(isRefreshingHistory)
-                        }
-                        
                         Button(action: {
                             selectedLogDate = Date()
                             caloriesInput = ""
@@ -326,68 +315,47 @@ struct LogListContent: View {
         return try? modelContext.fetch(descriptor).first
     }
     
-    private func refreshLast365Days() {
-        guard profile.enableHealthKitSync else { return }
-        isRefreshingHistory = true
-        // Only consider the loaded weight entries for the limit
-        let firstWeightDate = weightEntries.first?.date
+    // NEW FUNCTION: Smart History Sync (Last 7 Days)
+    private func syncRecentHistory(days: Int) async {
+        let historyData = await healthManager.fetchSmartHistory(days: days)
+        let dataManager = DataManager(modelContext: modelContext)
         
-        Task {
-            let today = Calendar.current.startOfDay(for: Date())
-            let dataManager = DataManager(modelContext: modelContext)
-            
-            for i in 0..<365 {
-                guard let date = Calendar.current.date(byAdding: .day, value: -i, to: today) else { continue }
+        await MainActor.run {
+            for (date, data) in historyData {
+                let normalizedDate = Calendar.current.startOfDay(for: date)
                 
-                if let startLimit = firstWeightDate {
-                    let startOfDayLimit = Calendar.current.startOfDay(for: startLimit)
-                    if date < startOfDayLimit {
-                        continue
-                    }
+                // 1. Sync Logs
+                let descriptor = FetchDescriptor<DailyLog>(predicate: #Predicate { $0.date == normalizedDate })
+                if let log = try? modelContext.fetch(descriptor).first {
+                    // Update existing log
+                    // Only update if HealthKit has data (avoids overwriting manual 0s if HK is empty)
+                    if data.consumed > 0 { log.caloriesConsumed = Int(data.consumed) + log.manualCalories }
+                    if profile.enableCaloriesBurned && data.burned > 0 { log.caloriesBurned = Int(data.burned) }
+                    if data.protein > 0 { log.protein = Int(data.protein) + log.manualProtein }
+                    if data.carbs > 0 { log.carbs = Int(data.carbs) + log.manualCarbs }
+                    if data.fat > 0 { log.fat = Int(data.fat) + log.manualFat }
+                } else if data.consumed > 0 || data.burned > 0 {
+                    // Create missing log
+                    let newLog = DailyLog(date: normalizedDate, goalType: profile.goalType)
+                    newLog.caloriesConsumed = Int(data.consumed)
+                    if profile.enableCaloriesBurned { newLog.caloriesBurned = Int(data.burned) }
+                    newLog.protein = Int(data.protein)
+                    newLog.carbs = Int(data.carbs)
+                    newLog.fat = Int(data.fat)
+                    modelContext.insert(newLog)
                 }
                 
-                // Fetch Nutrition
-                let data = await healthManager.fetchHistoricalHealthData(for: date)
-                // Fetch Weight
-                let weight = await healthManager.fetchBodyMass(for: date)
-                
-                await MainActor.run {
-                    let normalizedDate = Calendar.current.startOfDay(for: date)
-                    
-                    let descriptor = FetchDescriptor<DailyLog>(predicate: #Predicate { $0.date == normalizedDate })
-                    let existingLog = try? modelContext.fetch(descriptor).first
-                    
-                    if let log = existingLog {
-                        log.caloriesConsumed = Int(data.consumed) + log.manualCalories
-                        if profile.enableCaloriesBurned { log.caloriesBurned = Int(data.burned) }
-                        log.protein = Int(data.protein) + log.manualProtein
-                        log.carbs = Int(data.carbs) + log.manualCarbs
-                        log.fat = Int(data.fat) + log.manualFat
-                        
-                    } else if data.consumed > 0 || data.burned > 0 {
-                        let newLog = DailyLog(date: date, goalType: profile.goalType)
-                        newLog.caloriesConsumed = Int(data.consumed)
-                        if profile.enableCaloriesBurned { newLog.caloriesBurned = Int(data.burned) }
-                        newLog.protein = Int(data.protein)
-                        newLog.carbs = Int(data.carbs)
-                        newLog.fat = Int(data.fat)
-                        modelContext.insert(newLog)
-                    }
-                    
-                    if weight > 0 {
-                        // Check against loaded entries to avoid duplications in view
-                        let hasWeightEntry = weightEntries.contains { Calendar.current.isDate($0.date, inSameDayAs: date) }
-                        if !hasWeightEntry {
-                            dataManager.addWeightEntry(date: date, weight: weight, goalType: profile.goalType)
-                        }
+                // 2. Sync Weight (if missing)
+                if data.weight > 0 {
+                    // Check if we already have a weight entry for this day
+                    let hasWeightEntry = weightEntries.contains { Calendar.current.isDate($0.date, inSameDayAs: normalizedDate) }
+                    if !hasWeightEntry {
+                        dataManager.addWeightEntry(date: normalizedDate, weight: data.weight, goalType: profile.goalType)
                     }
                 }
             }
             
-            await MainActor.run {
-                deduplicateLogs()
-                withAnimation { isRefreshingHistory = false }
-            }
+            deduplicateLogs()
         }
     }
     
@@ -557,12 +525,22 @@ struct LogListContent: View {
         showingLogSheet = false
     }
     
+    // UPDATED: setupOnAppear
     private func setupOnAppear() {
         deduplicateLogs()
         
         if profile.enableHealthKitSync {
+            // 1. Basic Auth (Just Cals/Weight/Macros) - Progressive Auth
             healthManager.requestBasicAuthorization()
+            
+            // 2. Fetch Today immediately for UI snap
             healthManager.fetchAllHealthData()
+            
+            // 3. Smart History Sync (Background)
+            // Catches up on the last 7 days of data efficiently
+            Task {
+                await syncRecentHistory(days: 7)
+            }
         }
             
         for log in logs {

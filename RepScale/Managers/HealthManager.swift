@@ -1,4 +1,5 @@
 import HealthKit
+import SwiftUI
 
 // Simple struct to hold display data
 struct NutritionItem: Identifiable {
@@ -20,7 +21,7 @@ class HealthManager: ObservableObject {
 
     // MARK: - Nutrition Type Definitions
     
-    // 1. BASIC TYPES: Requested immediately on Log Tab
+    // 1. BASIC TYPES: Requested immediately on Log Tab (Calories + Macros)
     private let basicDietaryTypes: [HKQuantityTypeIdentifier] = [
         .dietaryEnergyConsumed,
         .dietaryProtein,
@@ -40,7 +41,7 @@ class HealthManager: ObservableObject {
         .dietaryWater, .dietaryCaffeine
     ]
     
-    // Combined helper for fetching data (computed property)
+    // Combined helper for fetching data
     private var allDietaryTypes: [HKQuantityTypeIdentifier] {
         return basicDietaryTypes + extendedDietaryTypes
     }
@@ -138,6 +139,112 @@ class HealthManager: ObservableObject {
         }
     }
     
+    // MARK: - Smart History Sync (Collection Query)
+
+    /// Efficiently fetches daily totals for the last `days` count.
+    /// Returns a dictionary keyed by Date (start of day) containing the values.
+    func fetchSmartHistory(days: Int) async -> [Date: (burned: Double, consumed: Double, protein: Double, carbs: Double, fat: Double, weight: Double)] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        guard let startDate = calendar.date(byAdding: .day, value: -days, to: today) else { return [:] }
+        
+        // We will fetch these 6 metrics in parallel
+        return await withTaskGroup(of: (HKQuantityTypeIdentifier, [Date: Double]).self) { group in
+            
+            // 1. Define the metrics we want to history-sync
+            let metrics: [(HKQuantityTypeIdentifier, HKUnit, HKStatisticsOptions)] = [
+                (.activeEnergyBurned, .kilocalorie(), .cumulativeSum),
+                (.dietaryEnergyConsumed, .kilocalorie(), .cumulativeSum),
+                (.dietaryProtein, .gram(), .cumulativeSum),
+                (.dietaryCarbohydrates, .gram(), .cumulativeSum),
+                (.dietaryFatTotal, .gram(), .cumulativeSum),
+                (.bodyMass, .gramUnit(with: .kilo), .discreteAverage) // Weight is average, not sum
+            ]
+            
+            // 2. Launch a query for each metric
+            for (id, unit, option) in metrics {
+                group.addTask {
+                    return (id, await self.performCollectionQuery(for: id, unit: unit, option: option, startDate: startDate))
+                }
+            }
+            
+            // 3. Consolidate results into a single dictionary by Date
+            var consolidated: [Date: (burned: Double, consumed: Double, protein: Double, carbs: Double, fat: Double, weight: Double)] = [:]
+            
+            for await (id, results) in group {
+                for (date, value) in results {
+                    // Initialize tuple if missing
+                    if consolidated[date] == nil {
+                        consolidated[date] = (0, 0, 0, 0, 0, 0)
+                    }
+                    
+                    // Map the value to the correct tuple field
+                    switch id {
+                    case .activeEnergyBurned: consolidated[date]?.burned = value
+                    case .dietaryEnergyConsumed: consolidated[date]?.consumed = value
+                    case .dietaryProtein: consolidated[date]?.protein = value
+                    case .dietaryCarbohydrates: consolidated[date]?.carbs = value
+                    case .dietaryFatTotal: consolidated[date]?.fat = value
+                    case .bodyMass: consolidated[date]?.weight = value
+                    default: break
+                    }
+                }
+            }
+            
+            return consolidated
+        }
+    }
+
+    // Helper: Wraps HKStatisticsCollectionQuery in an async function
+    private func performCollectionQuery(for identifier: HKQuantityTypeIdentifier, unit: HKUnit, option: HKStatisticsOptions, startDate: Date) async -> [Date: Double] {
+        return await withCheckedContinuation { continuation in
+            guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else {
+                continuation.resume(returning: [:])
+                return
+            }
+            
+            let anchor = Calendar.current.startOfDay(for: Date()) // Anchor at midnight
+            let interval = DateComponents(day: 1) // Daily intervals
+            
+            let query = HKStatisticsCollectionQuery(
+                quantityType: type,
+                quantitySamplePredicate: nil, // We filter by date in the enumeration below
+                options: option,
+                anchorDate: anchor,
+                intervalComponents: interval
+            )
+            
+            query.initialResultsHandler = { _, results, _ in
+                var dailyValues: [Date: Double] = [:]
+                
+                guard let statsCollection = results else {
+                    continuation.resume(returning: [:])
+                    return
+                }
+                
+                // Enumerate from startDate to Now
+                statsCollection.enumerateStatistics(from: startDate, to: Date()) { statistics, _ in
+                    var value: Double = 0
+                    
+                    if option == .discreteAverage {
+                        value = statistics.averageQuantity()?.doubleValue(for: unit) ?? 0
+                    } else {
+                        value = statistics.sumQuantity()?.doubleValue(for: unit) ?? 0
+                    }
+                    
+                    if value > 0 {
+                        let date = Calendar.current.startOfDay(for: statistics.startDate)
+                        dailyValues[date] = value
+                    }
+                }
+                
+                continuation.resume(returning: dailyValues)
+            }
+            
+            healthStore.execute(query)
+        }
+    }
+    
     // MARK: - Detailed Data Fetching
     
     /// Fetches all defined nutrition types for a specific date
@@ -184,7 +291,9 @@ class HealthManager: ObservableObject {
             }
             
             let predicate = getPredicate(for: date)
+            // Using discreteAverage to get a representative weight for the day if multiple samples exist
             let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .discreteAverage) { _, result, _ in
+                // Always fetch as kg to match internal storage
                 let val = result?.averageQuantity()?.doubleValue(for: .gramUnit(with: .kilo)) ?? 0
                 continuation.resume(returning: val)
             }
@@ -192,7 +301,7 @@ class HealthManager: ObservableObject {
         }
     }
     
-    // MARK: - Historical Data Sync (Keep existing for backward compatibility)
+    // MARK: - Historical Data Sync (Keep for single-day loops if needed)
     
     func fetchHistoricalHealthData(for date: Date) async -> (burned: Double, consumed: Double, protein: Double, carbs: Double, fat: Double) {
         return await withTaskGroup(of: (HKQuantityTypeIdentifier, Double).self) { group in
@@ -253,9 +362,9 @@ class HealthManager: ObservableObject {
     private func getPreferredUnit(for identifier: HKQuantityTypeIdentifier) -> HKUnit {
         switch identifier {
         case .dietaryEnergyConsumed: return .kilocalorie()
-        case .dietaryCholesterol, .dietarySodium, .dietaryPotassium, .dietaryCaffeine: return .gramUnit(with: .milli)
-        case .dietaryVitaminA, .dietaryVitaminD, .dietaryVitaminB12, .dietaryFolate, .dietaryBiotin: return .gramUnit(with: .micro)
-        case .dietaryWater: return .literUnit(with: .milli)
+        case .dietaryCholesterol, .dietarySodium, .dietaryPotassium, .dietaryCaffeine: return .gramUnit(with: .milli) // mg
+        case .dietaryVitaminA, .dietaryVitaminD, .dietaryVitaminB12, .dietaryFolate, .dietaryBiotin: return .gramUnit(with: .micro) // mcg
+        case .dietaryWater: return .literUnit(with: .milli) // mL
         default: return .gram()
         }
     }

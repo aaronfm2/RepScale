@@ -339,33 +339,38 @@ struct WeightListContent: View {
         guard profile.enableHealthKitSync else { return }
         
         // Retrieve the earliest existing weight entry to act as a cutoff
+        // We do this on the main thread before the Task
         let earliestEntryDate = allWeights.first?.date
         
         Task {
-            // Fetch for the last 90 days
-            for dayOffset in 0..<90 {
-                guard let date = Calendar.current.date(byAdding: .day, value: -dayOffset, to: Date()) else { continue }
-                
-                // If we have an existing history, do not sync data older than the very first entry
-                if let earliest = earliestEntryDate {
-                    let dateStart = Calendar.current.startOfDay(for: date)
-                    let earliestStart = Calendar.current.startOfDay(for: earliest)
+            // UPDATED: Use Smart History Sync (90 days)
+            // This grabs 90 days of data in 1 query instead of 90 queries
+            let historyData = await healthManager.fetchSmartHistory(days: 90)
+            
+            await MainActor.run {
+                for (date, data) in historyData {
+                    // 1. Must have weight data
+                    guard data.weight > 0 else { continue }
                     
-                    if dateStart < earliestStart {
-                        continue
-                    }
-                }
-                
-                let weight = await healthManager.fetchBodyMass(for: date)
-                
-                if weight > 0 {
-                    await MainActor.run {
-                        let targetDate = Calendar.current.startOfDay(for: date)
-                        let hasEntry = weights.contains { Calendar.current.isDate($0.date, inSameDayAs: targetDate) }
+                    // 2. Check "Earliest Date" constraint
+                    // If we have an existing history, do not sync data older than the very first entry
+                    if let earliest = earliestEntryDate {
+                        let dateStart = Calendar.current.startOfDay(for: date)
+                        let earliestStart = Calendar.current.startOfDay(for: earliest)
                         
-                        if !hasEntry {
-                            dataManager.addWeightEntry(date: date, weight: weight, goalType: profile.goalType)
+                        // If this HK data is OLDER than our first app entry, skip it
+                        if dateStart < earliestStart {
+                            continue
                         }
+                    }
+                    
+                    // 3. Check for duplicates in the CURRENT list
+                    let targetDate = Calendar.current.startOfDay(for: date)
+                    let hasEntry = allWeights.contains { Calendar.current.isDate($0.date, inSameDayAs: targetDate) }
+                    
+                    if !hasEntry {
+                        // 4. Add new entry
+                        dataManager.addWeightEntry(date: date, weight: data.weight, goalType: profile.goalType)
                     }
                 }
             }
