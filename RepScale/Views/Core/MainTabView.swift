@@ -16,7 +16,7 @@ struct MainTabView: View {
         TutorialStep(
             id: 0,
             title: "Dashboard Tab",
-            description: "This is your main dashboard. It shows your weight trends, calorie balance, and goal projections.",
+            description: "This is your main dashboard. It shows your weight trends, nutrition, strength, and goal projections.",
             tabIndex: 0,
             highlights: [.tab(index: 0)]
         ),
@@ -37,7 +37,7 @@ struct MainTabView: View {
         TutorialStep(
             id: 3,
             title: "Apple Health Sync",
-            description: "Sync data from Apple Health. If you use other apps which write to Apple Health (like MyFitnessPal) and want to sync that data.",
+            description: "Click the logs tab and allow Apple Health to sync nutrition. If you use other apps which write to Apple Health (like MyFitnessPal) and wish to sync that data.",
             tabIndex: 0,
             highlights: []
         ),
