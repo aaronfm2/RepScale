@@ -157,7 +157,23 @@ struct GoalConfigurationView: View {
         if let savedType = GoalType(rawValue: profile.goalType) { selectedGoalType = savedType }
         localMaintenanceTolerance = profile.maintenanceTolerance
         if profile.targetWeight > 0 { targetWeight = profile.targetWeight.toUserWeight(system: profile.unitSystem) }
-        if appEstimatedMaintenance != nil { maintenanceSource = 1 }
+        
+        // Load saved maintenance source preference
+        if let savedSource = profile.maintenanceSourcePreference {
+            // If the user previously selected "App Estimate" (1) but it is no longer available (e.g. data cleared),
+            // fallback to Formula (0). Otherwise, honor the saved preference.
+            if savedSource == 1 && appEstimatedMaintenance == nil {
+                maintenanceSource = 0
+            } else {
+                maintenanceSource = savedSource
+            }
+        } else {
+            // No preference saved yet: Default logic
+            // If app estimate is available, default to it (1), otherwise Formula (0)
+            if appEstimatedMaintenance != nil { maintenanceSource = 1 }
+            else { maintenanceSource = 0 }
+        }
+        
         recalculate()
     }
     
@@ -228,6 +244,7 @@ struct GoalConfigurationView: View {
         profile.goalType = selectedGoalType.rawValue
         profile.maintenanceCalories = maintenanceDisplay
         profile.maintenanceTolerance = localMaintenanceTolerance
+        profile.maintenanceSourcePreference = maintenanceSource
         
         if isSameGoalType {
             dataManager.updateActiveGoalPeriod(targetWeight: tWeightStored, dailyCalorieGoal: dailyGoal, maintenanceCalories: maintenanceDisplay)

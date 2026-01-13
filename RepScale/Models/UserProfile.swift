@@ -26,6 +26,7 @@ final class UserProfile {
     var maintenanceCalories: Int = 2500
     var maintenanceTolerance: Double = 2.0
     var estimationMethod: Int = 0
+    var maintenanceSourcePreference: Int? = nil // Stores the preferred maintenance calculation source (0: Formula, 1: App, 2: Manual)
     
     // MARK: - Feature Flags
     var isCalorieCountingEnabled: Bool = true
