@@ -15,6 +15,7 @@ struct ProjectionComparisonCard: View {
     
     // Internal State
     @State private var selectedTimeFrame: Int = 60
+    @State private var showingMaintenanceSheet = false
     
     var weightLabel: String { profile.unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
     
@@ -81,6 +82,21 @@ struct ProjectionComparisonCard: View {
                     .background(Color.blue.opacity(0.1), in: Capsule())
                 }
                 
+                // Maintenance Configuration Button
+                Button(action: { showingMaintenanceSheet = true }) {
+                    Image(systemName: "gearshape.fill")
+                        .font(.caption2).fontWeight(.bold).foregroundColor(.secondary)
+                        .padding(6).background(Color.secondary.opacity(0.1)).clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .sheet(isPresented: $showingMaintenanceSheet) {
+                    MaintenanceSelectionSheet(
+                        profile: profile,
+                        formulaValue: calculateFormulaMaintenance(currentWeight: currentWeightKg),
+                        appEstimate: viewModel.estimatedMaintenance
+                    )
+                }
+                
                 ReorderArrows(index: index, totalCount: totalCount, onUp: onMoveUp, onDown: onMoveDown)
             }
             .padding(.bottom, 8)
@@ -125,7 +141,200 @@ struct ProjectionComparisonCard: View {
         }
         .padding().background(RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.1)))
     }
+    
+    // Helper to calculate Formula (Mifflin-St Jeor) locally
+    private func calculateFormulaMaintenance(currentWeight: Double) -> Int {
+        let age = Double(profile.age)
+        let height = profile.height // cm
+        let activity = ActivityLevel(rawValue: profile.activityLevel) ?? .moderatelyActive
+        let isMale = (profile.gender == Gender.male.rawValue)
+        
+        let base: Double = (10 * currentWeight) + (6.25 * height) - (5 * age)
+        let genderOffset: Double = isMale ? 5 : -161
+        let bmr = base + genderOffset
+        
+        return Int(bmr * activity.multiplier)
+    }
 }
+
+// MARK: - Maintenance Selection Sheet
+
+struct MaintenanceSelectionSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @Bindable var profile: UserProfile
+    
+    let formulaValue: Int
+    let appEstimate: Int?
+    
+    @State private var manualValue: Int
+    @State private var isManual: Bool
+    
+    // Track focus for keyboard
+    @FocusState private var isInputFocused: Bool
+    
+    init(profile: UserProfile, formulaValue: Int, appEstimate: Int?) {
+        self.profile = profile
+        self.formulaValue = formulaValue
+        self.appEstimate = appEstimate
+        
+        let current = profile.maintenanceCalories
+        
+        // Initial state logic
+        // We initialize manualValue to the current value so the field isn't empty,
+        // but we won't overwrite it later when clicking buttons.
+        _manualValue = State(initialValue: current)
+        
+        if current == formulaValue {
+            _isManual = State(initialValue: false)
+        } else if let app = appEstimate, current == app {
+            _isManual = State(initialValue: false)
+        } else {
+            _isManual = State(initialValue: true)
+        }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    // Formula Option
+                    Button {
+                        apply(val: formulaValue, manual: false)
+                    } label: {
+                        row(title: "Formula Estimate",
+                            subtitle: "Based on your height, weight, age and activity level using the Mifflin-St Jeor forumla",
+                            value: formulaValue,
+                            isSelected: !isManual && profile.maintenanceCalories == formulaValue)
+                    }
+                    .tint(.primary)
+                    
+                    // App Estimate Option
+                    if let app = appEstimate {
+                        Button {
+                            apply(val: app, manual: false)
+                        } label: {
+                            row(title: "App Estimate",
+                                subtitle: "Derived from your 30-day log history",
+                                value: app,
+                                isSelected: !isManual && profile.maintenanceCalories == app)
+                        }
+                        .tint(.primary)
+                    }
+                    
+                    // Manual Option
+                    HStack {
+                        // Tapping the Label/VStack selects Manual
+                        VStack(alignment: .leading) {
+                            Text("Manual")
+                                .font(.body)
+                                .foregroundStyle(.primary)
+                            Text("Set your own fixed value")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .contentShape(Rectangle()) // Makes the whole text area tappable
+                        .onTapGesture {
+                            selectManual()
+                        }
+                        
+                        Spacer()
+                        
+                        TextField("kcal", value: $manualValue, format: .number)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .focused($isInputFocused)
+                            .frame(width: 90)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .background(Color.gray.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                            // Updates when value changes (typing)
+                            .onChange(of: manualValue) { _, newVal in
+                                isManual = true
+                                profile.maintenanceCalories = newVal
+                            }
+                        
+                        if isManual {
+                            Image(systemName: "checkmark")
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.blue)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                    // Watch focus state: if user taps box, select manual immediately
+                    .onChange(of: isInputFocused) { _, focused in
+                        if focused {
+                            selectManual()
+                        }
+                    }
+                } header: {
+                    Text("Calorie Source")
+                }
+            }
+            .navigationTitle("Maintenance Config")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                // Main Sheet Done Button
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .fontWeight(.semibold)
+                }
+                
+                // Keyboard Done Button
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        isInputFocused = false
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+        .presentationDetents([.medium, .fraction(0.5)])
+    }
+    
+    private func selectManual() {
+        withAnimation {
+            isManual = true
+            profile.maintenanceCalories = manualValue
+        }
+    }
+    
+    private func row(title: String, subtitle: String, value: Int, isSelected: Bool) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.body)
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text("\(value)")
+                .fontWeight(.medium)
+            Text("kcal")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.blue)
+                    .padding(.leading, 8)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+    
+    private func apply(val: Int, manual: Bool) {
+        withAnimation {
+            isInputFocused = false // dismiss keyboard if switching
+            isManual = manual
+            profile.maintenanceCalories = val
+        }
+    }
+}
+
+// MARK: - Other Cards
 
 struct WeightChangeCard: View {
     @Bindable var profile: UserProfile
