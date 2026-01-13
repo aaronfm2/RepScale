@@ -321,10 +321,24 @@ struct LogListContent: View {
         let dataManager = DataManager(modelContext: modelContext)
         
         await MainActor.run {
+            // 1. Determine the start of the user's journey (Earliest Weight Entry)
+            var journeyStartDate: Date?
+            var descriptor = FetchDescriptor<WeightEntry>(sortBy: [SortDescriptor(\.date, order: .forward)])
+            descriptor.fetchLimit = 1 // Efficiency: Only need the very first one
+            
+            if let firstEntry = try? modelContext.fetch(descriptor).first {
+                journeyStartDate = Calendar.current.startOfDay(for: firstEntry.date)
+            }
+
             for (date, data) in historyData {
                 let normalizedDate = Calendar.current.startOfDay(for: date)
                 
-                // 1. Sync Logs
+                // 2. FILTER: Skip dates before the first weight entry
+                if let startDate = journeyStartDate, normalizedDate < startDate {
+                    continue
+                }
+
+                // 3. Sync Logs
                 let descriptor = FetchDescriptor<DailyLog>(predicate: #Predicate { $0.date == normalizedDate })
                 if let log = try? modelContext.fetch(descriptor).first {
                     // Update existing log
@@ -345,7 +359,7 @@ struct LogListContent: View {
                     modelContext.insert(newLog)
                 }
                 
-                // 2. Sync Weight (if missing)
+                // 4. Sync Weight (if missing)
                 if data.weight > 0 {
                     // Check if we already have a weight entry for this day
                     let hasWeightEntry = weightEntries.contains { Calendar.current.isDate($0.date, inSameDayAs: normalizedDate) }
