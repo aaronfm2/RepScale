@@ -62,6 +62,7 @@ struct SettingsView: View {
                             Text(gender.rawValue).tag(gender.rawValue)
                         }
                     } label: { Label("Gender", systemImage: "person").foregroundColor(.primary) }
+                    .onChange(of: profile.gender) { _, _ in recalculateMaintenance() } // <--- Added Trigger
                     
                     // Date of Birth
                     VStack(alignment: .leading, spacing: 5) {
@@ -74,6 +75,7 @@ struct SettingsView: View {
                             .datePickerStyle(.compact)
                             .labelsHidden()
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .onChange(of: profile.dateOfBirth) { _, _ in recalculateMaintenance() } // <--- Added Trigger
                     }
                     .padding(.vertical, 4)
                     
@@ -146,12 +148,14 @@ struct SettingsView: View {
                             }
                         }
                     }
+                    .onChange(of: profile.height) { _, _ in recalculateMaintenance() } // <--- Added Trigger
                     
                     Picker(selection: $profile.activityLevel) {
                         ForEach(ActivityLevel.allCases, id: \.self) { level in
                             Text(level.rawValue).tag(level.rawValue)
                         }
                     } label: { Label("Activity Level", systemImage: "figure.walk").foregroundColor(.primary) }
+                    .onChange(of: profile.activityLevel) { _, _ in recalculateMaintenance() } // <--- Added Trigger
                     
                 } header: {
                     Text("About You")
@@ -288,6 +292,32 @@ struct SettingsView: View {
                 } else {
                     selectedHeightUnit = UnitSystem(rawValue: profile.unitSystem) ?? .metric
                 }
+            }
+        }
+    }
+    
+    // MARK: - Auto-Recalculate Maintenance Logic
+    private func recalculateMaintenance() {
+        guard let currentKg = currentWeight else { return }
+        
+        let age = Double(profile.age)
+        let height = profile.height // stored in cm
+        let activity = ActivityLevel(rawValue: profile.activityLevel) ?? .moderatelyActive
+        let isMale = (profile.gender == Gender.male.rawValue)
+        
+        // Mifflin-St Jeor Calculation
+        let base: Double = (10 * currentKg) + (6.25 * height) - (5 * age)
+        let genderOffset: Double = isMale ? 5 : -161
+        let bmr = base + genderOffset
+        
+        let newMaintenance = Int(bmr * activity.multiplier)
+        
+        withAnimation {
+            profile.maintenanceCalories = newMaintenance
+            
+            // If user's goal is maintenance, sync the daily target too
+            if profile.goalType == GoalType.maintenance.rawValue {
+                profile.dailyCalorieGoal = newMaintenance
             }
         }
     }
