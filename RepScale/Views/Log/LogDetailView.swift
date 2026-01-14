@@ -14,6 +14,9 @@ struct LogDetailView: View {
     @State private var showingEditOverrides = false
     @State private var showingDetailedNutrition = false
     
+    // MARK: - FIX: Keyboard State
+    @State private var isKeyboardVisible = false
+    
     var weightLabel: String { profile.unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
 
     var appBackgroundColor: Color {
@@ -37,31 +40,57 @@ struct LogDetailView: View {
     }
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                dateHeader
-                
-                if profile.isCalorieCountingEnabled {
-                    if log.isOverridden {
-                        manualOverrideBanner
+        ZStack {
+            ScrollView {
+                VStack(spacing: 24) {
+                    dateHeader
+                    
+                    if profile.isCalorieCountingEnabled {
+                        if log.isOverridden {
+                            manualOverrideBanner
+                        }
+                        nutritionSection
                     }
-                    nutritionSection
+                    
+                    workoutsSection
+                    
+                    // --- Weight Section ---
+                    if let entry = weightEntry {
+                        weightSection(entry: entry)
+                    }
+                    
+                    notesSection
+                    
+                    // Spacer for Keyboard
+                    Color.clear.frame(height: 80)
                 }
-                
-                workoutsSection
-                
-                // --- Weight Section ---
-                if let entry = weightEntry {
-                    weightSection(entry: entry)
-                }
-                
-                notesSection
-                
+                .padding(.bottom, 30)
             }
-            .padding(.bottom, 30)
+            .background(appBackgroundColor)
+            .scrollDismissesKeyboard(.interactively)
+            
+            // MARK: - Custom Keyboard Toolbar
+            VStack {
+                Spacer()
+                if isKeyboardVisible {
+                    VStack(spacing: 0) {
+                        Divider()
+                        HStack {
+                            Spacer()
+                            Button("Done") {
+                                hideKeyboard()
+                            }
+                            .bold()
+                            .tint(.blue)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+                        .background(.bar)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
         }
-        .background(appBackgroundColor)
-        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Daily Summary")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -81,16 +110,6 @@ struct LogDetailView: View {
                     .disabled(isSyncing)
                 }
             }
-            
-            // MARK: - FIX: Keyboard Toolbar
-            // This button uses a global dismiss action to close the keyboard for the notes section.
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") {
-                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                }
-                .bold()
-            }
         }
         .sheet(isPresented: $showingEditOverrides) {
             EditOverridesSheet(log: log)
@@ -98,6 +117,24 @@ struct LogDetailView: View {
         .sheet(isPresented: $showingDetailedNutrition) {
             DetailedNutritionView(date: log.date, healthManager: healthManager)
         }
+        // MARK: - Keyboard Observers
+        .onAppear {
+            NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { _ in
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isKeyboardVisible = true
+                }
+            }
+            
+            NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isKeyboardVisible = false
+                }
+            }
+        }
+    }
+    
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
     
     // --- Weight Section View ---
@@ -249,28 +286,28 @@ struct LogDetailView: View {
             Divider()
             
             Button(action: {
-                            // UPDATE: Request extended permissions before showing the sheet
-                            healthManager.requestExtendedAuthorization { success in
-                                // This completion block runs on the main thread
-                                showingDetailedNutrition = true
-                            }
-                        }) {
-                            HStack {
-                                Text("See All Nutrition Data")
-                                    .fontWeight(.medium)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                            }
-                            .font(.subheadline)
-                            .foregroundColor(.blue)
+                        // UPDATE: Request extended permissions before showing the sheet
+                        healthManager.requestExtendedAuthorization { success in
+                            // This completion block runs on the main thread
+                            showingDetailedNutrition = true
                         }
-                        .padding(.top, 4)
+                    }) {
+                        HStack {
+                            Text("See All Nutrition Data")
+                                .fontWeight(.medium)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                        }
+                        .font(.subheadline)
+                        .foregroundColor(.blue)
                     }
-                    .padding()
-                    .background(RoundedRectangle(cornerRadius: 12).fill(cardBackgroundColor))
-                    .padding(.horizontal)
+                    .padding(.top, 4)
                 }
+                .padding()
+                .background(RoundedRectangle(cornerRadius: 12).fill(cardBackgroundColor))
+                .padding(.horizontal)
+            }
     
     private var workoutsSection: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -390,43 +427,74 @@ struct EditOverridesSheet: View {
     @State private var editedCarbs: Int = 0
     @State private var editedFat: Int = 0
     
-    // MARK: - FIX: Focus State for Edit Sheet
+    // MARK: - FIX: Focus & Keyboard State
     @FocusState private var isInputFocused: Bool
+    @State private var isKeyboardVisible = false
     
     var body: some View {
         NavigationStack {
-            Form {
-                Section(header: Text("Manual Additions")) {
-                    HStack {
-                        Text("Calories (+)")
-                        Spacer()
-                        TextField("0", value: $editedCalories, format: .number)
-                            .keyboardType(.numberPad).multilineTextAlignment(.trailing)
-                            .focused($isInputFocused)
+            ZStack {
+                Form {
+                    Section(header: Text("Manual Additions")) {
+                        HStack {
+                            Text("Calories (+)")
+                            Spacer()
+                            TextField("0", value: $editedCalories, format: .number)
+                                .keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                                .focused($isInputFocused)
+                        }
+                        HStack {
+                            Text("Protein (+)")
+                            Spacer()
+                            TextField("0", value: $editedProtein, format: .number)
+                                .keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                                .focused($isInputFocused)
+                        }
+                        HStack {
+                            Text("Carbs (+)")
+                            Spacer()
+                            TextField("0", value: $editedCarbs, format: .number)
+                                .keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                                .focused($isInputFocused)
+                        }
+                        HStack {
+                            Text("Fat (+)")
+                            Spacer()
+                            TextField("0", value: $editedFat, format: .number)
+                                .keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                                .focused($isInputFocused)
+                        }
                     }
-                    HStack {
-                        Text("Protein (+)")
-                        Spacer()
-                        TextField("0", value: $editedProtein, format: .number)
-                            .keyboardType(.numberPad).multilineTextAlignment(.trailing)
-                            .focused($isInputFocused)
+                    Section(footer: Text("Adjusting these values updates the Total instantly. HealthKit data remains the baseline.")) { }
+                    
+                    // Spacer for Keyboard
+                    Section {
+                        Color.clear.frame(height: 80)
                     }
-                    HStack {
-                        Text("Carbs (+)")
-                        Spacer()
-                        TextField("0", value: $editedCarbs, format: .number)
-                            .keyboardType(.numberPad).multilineTextAlignment(.trailing)
-                            .focused($isInputFocused)
-                    }
-                    HStack {
-                        Text("Fat (+)")
-                        Spacer()
-                        TextField("0", value: $editedFat, format: .number)
-                            .keyboardType(.numberPad).multilineTextAlignment(.trailing)
-                            .focused($isInputFocused)
+                    .listRowBackground(Color.clear)
+                }
+                
+                // MARK: - Custom Keyboard Toolbar
+                VStack {
+                    Spacer()
+                    if isKeyboardVisible {
+                        VStack(spacing: 0) {
+                            Divider()
+                            HStack {
+                                Spacer()
+                                Button("Done") {
+                                    hideKeyboard()
+                                }
+                                .bold()
+                                .tint(.blue)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                            }
+                            .background(.bar)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
-                Section(footer: Text("Adjusting these values updates the Total instantly. HealthKit data remains the baseline.")) { }
             }
             .navigationTitle("Edit Manual Entries")
             .toolbar {
@@ -436,24 +504,30 @@ struct EditOverridesSheet: View {
                         dismiss()
                     }
                 }
-                
-                if isInputFocused {
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button("Done") {
-                            isInputFocused = false
-                        }
-                        .fontWeight(.bold)
-                    }
-                }
             }
             .onAppear {
                 editedCalories = log.manualCalories
                 editedProtein = log.manualProtein
                 editedCarbs = log.manualCarbs
                 editedFat = log.manualFat
+                
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isKeyboardVisible = true
+                    }
+                }
+                
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isKeyboardVisible = false
+                    }
+                }
             }
         }
+    }
+    
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
     
     private func saveChanges() {

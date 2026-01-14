@@ -20,8 +20,11 @@ struct WeightEntryDetailView: View {
     @State private var showDeleteConfirmation = false
     @State private var photoToDelete: ProgressPhoto?
     
-    // MARK: - FIX: Local Focus State for Keyboard Toolbar
+    // MARK: - FIX: Local Focus State
     @FocusState private var isInputFocused: Bool
+    
+    // MARK: - FIX: Keyboard State
+    @State private var isKeyboardVisible = false
     
     let tags = ["Full Body", "Upper Body", "Arms", "Chest", "Back", "Shoulders", "Legs"]
     var weightLabel: String { profile.unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
@@ -32,80 +35,96 @@ struct WeightEntryDetailView: View {
     }
 
     var body: some View {
-        Form {
-            Section("Details") {
-                DatePicker("Date", selection: $entry.date)
-                HStack {
-                    Text("Weight")
-                    Spacer()
-                    TextField("Weight", value: $entry.weight, format: .number)
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                        .focused($isInputFocused) // FIX: Bind Focus
-                    Text(weightLabel).foregroundColor(.secondary)
-                }
-                TextField("Note", text: $entry.note, axis: .vertical)
-                    .focused($isInputFocused) // FIX: Bind Focus
-            }
-            
-            Section("Progress Photos") {
-                Button {
-                    showImageOptions = true
-                } label: {
-                    Label("Add Photos", systemImage: "photo.badge.plus")
-                }
-                .disabled(isProcessingImage) // Disable while processing
-                
-                if isProcessingImage {
+        ZStack {
+            Form {
+                Section("Details") {
+                    DatePicker("Date", selection: $entry.date)
                     HStack {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("Processing photo...")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        Text("Weight")
+                        Spacer()
+                        TextField("Weight", value: $entry.weight, format: .number)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .focused($isInputFocused)
+                        Text(weightLabel).foregroundColor(.secondary)
                     }
-                    .padding(.vertical, 8)
+                    TextField("Note", text: $entry.note, axis: .vertical)
+                        .focused($isInputFocused)
                 }
                 
-                if let photos = entry.photos, !photos.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            ForEach(photos) { photo in
-                                PhotoRowView(
-                                    photo: photo,
-                                    tags: tags,
-                                    selectedPhotoData: $selectedPhotoData,
-                                    onDelete: {
-                                        photoToDelete = photo
-                                        showDeleteConfirmation = true
-                                    }
-                                )
-                            }
+                Section("Progress Photos") {
+                    Button {
+                        showImageOptions = true
+                    } label: {
+                        Label("Add Photos", systemImage: "photo.badge.plus")
+                    }
+                    .disabled(isProcessingImage) // Disable while processing
+                    
+                    if isProcessingImage {
+                        HStack {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Processing photo...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                         .padding(.vertical, 8)
-                        .padding(.horizontal, 4)
                     }
+                    
+                    if let photos = entry.photos, !photos.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(photos) { photo in
+                                    PhotoRowView(
+                                        photo: photo,
+                                        tags: tags,
+                                        selectedPhotoData: $selectedPhotoData,
+                                        onDelete: {
+                                            photoToDelete = photo
+                                            showDeleteConfirmation = true
+                                        }
+                                    )
+                                }
+                            }
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 4)
+                        }
+                    }
+                }
+                
+                // Spacer for Keyboard
+                Section {
+                    Color.clear.frame(height: 80)
+                }
+                .listRowBackground(Color.clear)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .scrollContentBackground(.hidden)
+            .background(appBackgroundColor)
+            
+            // MARK: - Custom Keyboard Toolbar
+            VStack {
+                Spacer()
+                if isKeyboardVisible {
+                    VStack(spacing: 0) {
+                        Divider()
+                        HStack {
+                            Spacer()
+                            Button("Done") {
+                                hideKeyboard()
+                            }
+                            .bold()
+                            .tint(.blue)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+                        .background(.bar)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
         }
-        .scrollDismissesKeyboard(.interactively)
-        // --- Added: Apply Background Color ---
-        .scrollContentBackground(.hidden)
-        .background(appBackgroundColor)
-        // ------------------------------------
         .navigationTitle("Edit Log")
-        // MARK: - FIX: Keyboard Toolbar
-        .toolbar {
-            if isInputFocused {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        isInputFocused = false
-                    }
-                    .fontWeight(.bold)
-                }
-            }
-        }
         
         // --- 1. Selection Dialog ---
         .confirmationDialog("Add Photo", isPresented: $showImageOptions) {
@@ -174,6 +193,25 @@ struct WeightEntryDetailView: View {
                 selectedItems.removeAll()
             }
         }
+        
+        // MARK: - Keyboard Observers
+        .onAppear {
+            NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { _ in
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isKeyboardVisible = true
+                }
+            }
+            
+            NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isKeyboardVisible = false
+                }
+            }
+        }
+    }
+    
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
     
     // Wrapper to handle single image state

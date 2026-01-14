@@ -99,8 +99,9 @@ struct WeightListContent: View {
     @State private var newNote: String = ""
     @State private var selectedDate: Date = Date()
     
-    // MARK: - Local Focus State for Add Sheet
+    // MARK: - Local Focus & Keyboard State for Add Sheet
     @FocusState private var isInputFocused: Bool
+    @State private var isKeyboardVisible = false
 
     private var dataManager: DataManager {
         DataManager(modelContext: modelContext)
@@ -261,49 +262,83 @@ struct WeightListContent: View {
             }
             .sheet(isPresented: $showingAddWeight) {
                 NavigationStack {
-                    Form {
-                        Section {
-                            DatePicker("Date", selection: $selectedDate, displayedComponents: [.date, .hourAndMinute])
-                        }
-                        Section {
-                            HStack {
-                                Text("Weight")
-                                Spacer()
-                                TextField("0.0", text: $newWeight)
-                                    .keyboardType(.decimalPad)
-                                    .multilineTextAlignment(.trailing)
-                                    .font(.title3)
+                    ZStack {
+                        Form {
+                            Section {
+                                DatePicker("Date", selection: $selectedDate, displayedComponents: [.date, .hourAndMinute])
+                            }
+                            Section {
+                                HStack {
+                                    Text("Weight")
+                                    Spacer()
+                                    TextField("0.0", text: $newWeight)
+                                        .keyboardType(.decimalPad)
+                                        .multilineTextAlignment(.trailing)
+                                        .font(.title3)
+                                        .focused($isInputFocused)
+                                        .frame(minWidth: 50)
+                                    Text(weightLabel).foregroundColor(.secondary)
+                                }
+                            }
+                            Section {
+                                TextField("Optional Note", text: $newNote)
                                     .focused($isInputFocused)
-                                    .frame(minWidth: 50)
-                                Text(weightLabel).foregroundColor(.secondary)
+                            }
+                            Section {
+                                Button("Save Entry") { saveWeight() }
+                                    .bold()
+                                    .frame(maxWidth: .infinity)
+                                    .disabled(newWeight.isEmpty)
+                            }
+                            
+                            // Spacer for Keyboard
+                            Section {
+                                Color.clear.frame(height: 80)
+                            }
+                            .listRowBackground(Color.clear)
+                        }
+                        .scrollDismissesKeyboard(.interactively)
+                        
+                        // MARK: - Custom Keyboard Toolbar
+                        VStack {
+                            Spacer()
+                            if isKeyboardVisible {
+                                VStack(spacing: 0) {
+                                    Divider()
+                                    HStack {
+                                        Spacer()
+                                        Button("Done") {
+                                            hideKeyboard()
+                                        }
+                                        .bold()
+                                        .tint(.blue)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 12)
+                                    }
+                                    .background(.bar)
+                                }
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
                             }
                         }
-                        Section {
-                            TextField("Optional Note", text: $newNote)
-                                .focused($isInputFocused)
-                        }
-                        Section {
-                            Button("Save Entry") { saveWeight() }
-                                .bold()
-                                .frame(maxWidth: .infinity)
-                                .disabled(newWeight.isEmpty)
-                        }
                     }
-                    .scrollDismissesKeyboard(.interactively)
                     .navigationTitle("Log Weight")
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Cancel") { showingAddWeight = false }
                         }
-                        
-                        // MARK: - FIX: Keyboard Toolbar for Add Sheet
-                        // Removed the 'if isInputFocused' check to prevent disappearance issues
-                        ToolbarItemGroup(placement: .keyboard) {
-                            Spacer()
-                            Button("Done") {
-                                isInputFocused = false
+                    }
+                    // MARK: - Keyboard Observers
+                    .onAppear {
+                        NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { _ in
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                isKeyboardVisible = true
                             }
-                            .fontWeight(.bold)
+                        }
+                        
+                        NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                isKeyboardVisible = false
+                            }
                         }
                     }
                 }
@@ -337,6 +372,10 @@ struct WeightListContent: View {
             // Run the fix: Sync start date with history
             dataManager.syncStartDataWithHistory()
         }
+    }
+    
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
     // MARK: - Logic
@@ -449,8 +488,9 @@ struct EditWeightView: View {
     @State private var editWeightStr: String
     @State private var editNote: String
     
-    // MARK: - FIX: Local Focus State for Edit Sheet
+    // MARK: - FIX: Local Focus & Keyboard State for Edit Sheet
     @FocusState private var isInputFocused: Bool
+    @State private var isKeyboardVisible = false
     
     init(entry: WeightEntry, unitSystem: String, weightLabel: String, onSave: @escaping (Date, Double, String) -> Void) {
         self.entry = entry
@@ -468,59 +508,97 @@ struct EditWeightView: View {
     
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    DatePicker("Date", selection: $editDate, displayedComponents: [.date, .hourAndMinute])
-                }
-                
-                Section {
-                    HStack {
-                        Text("Weight")
-                        Spacer()
-                        TextField("0.0", text: $editWeightStr)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($isInputFocused) // FIX: Bind Focus
-                        Text(weightLabel).foregroundColor(.secondary)
+            ZStack {
+                Form {
+                    Section {
+                        DatePicker("Date", selection: $editDate, displayedComponents: [.date, .hourAndMinute])
                     }
-                }
-                
-                Section(header: Text("Note")) {
-                    TextField("Optional Note", text: $editNote)
-                        .focused($isInputFocused) // FIX: Bind Focus
-                }
-                
-                Section {
-                    Button("Save Changes") {
-                        if let val = Double(editWeightStr) {
-                            // Convert back to stored KG
-                            let storedVal = val.toStoredWeight(system: unitSystem)
-                            onSave(editDate, storedVal, editNote)
+                    
+                    Section {
+                        HStack {
+                            Text("Weight")
+                            Spacer()
+                            TextField("0.0", text: $editWeightStr)
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .focused($isInputFocused)
+                            Text(weightLabel).foregroundColor(.secondary)
                         }
                     }
-                    .bold()
-                    .frame(maxWidth: .infinity)
+                    
+                    Section(header: Text("Note")) {
+                        TextField("Optional Note", text: $editNote)
+                            .focused($isInputFocused)
+                    }
+                    
+                    Section {
+                        Button("Save Changes") {
+                            if let val = Double(editWeightStr) {
+                                // Convert back to stored KG
+                                let storedVal = val.toStoredWeight(system: unitSystem)
+                                onSave(editDate, storedVal, editNote)
+                            }
+                        }
+                        .bold()
+                        .frame(maxWidth: .infinity)
+                    }
+                    
+                    // Spacer for Keyboard
+                    Section {
+                        Color.clear.frame(height: 80)
+                    }
+                    .listRowBackground(Color.clear)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                
+                // MARK: - Custom Keyboard Toolbar
+                VStack {
+                    Spacer()
+                    if isKeyboardVisible {
+                        VStack(spacing: 0) {
+                            Divider()
+                            HStack {
+                                Spacer()
+                                Button("Done") {
+                                    hideKeyboard()
+                                }
+                                .bold()
+                                .tint(.blue)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                            }
+                            .background(.bar)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
             }
-            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Edit Entry")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
-                
-                // MARK: - FIX: Keyboard Toolbar for Edit Sheet
-                // Removed the 'if isInputFocused' check to prevent disappearance issues
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        isInputFocused = false
+            }
+            // MARK: - Keyboard Observers
+            .onAppear {
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isKeyboardVisible = true
                     }
-                    .fontWeight(.bold)
+                }
+                
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isKeyboardVisible = false
+                    }
                 }
             }
         }
         .presentationDetents([.large])
+    }
+    
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 

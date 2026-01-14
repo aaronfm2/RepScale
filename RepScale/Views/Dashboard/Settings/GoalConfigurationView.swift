@@ -8,6 +8,9 @@ struct GoalConfigurationView: View {
     // MARK: - FIX: Focus State
     @FocusState private var isInputFocused: Bool
     
+    // MARK: - FIX: Keyboard State
+    @State private var isKeyboardVisible = false
+    
     var profile: UserProfile
     
     let appEstimatedMaintenance: Int?
@@ -41,116 +44,154 @@ struct GoalConfigurationView: View {
     
     var body: some View {
         NavigationStack {
-            Form {
-                // Goal Type & Current Weight Sections
-                Section(header: Text("Goal Configuration")) {
-                    Picker("Goal Type", selection: $selectedGoalType) {
-                        ForEach(GoalType.allCases, id: \.self) { type in Text(type.rawValue).tag(type) }
-                    }
-                    .pickerStyle(.segmented).onChange(of: selectedGoalType) { _, _ in recalculate() }
-                    
-                    HStack {
-                        Text("Current Weight")
-                        Spacer()
-                        if let w = latestWeightKg {
-                            Text("\(w.toUserWeight(system: profile.unitSystem), specifier: "%.1f") \(unitLabel)").foregroundColor(.secondary)
-                        } else { Text("No Data").foregroundColor(.red) }
-                    }
-                    
-                    if selectedGoalType != .maintenance {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("Target Weight (\(unitLabel))")
-                                Spacer()
-                                TextField("Required", value: $targetWeight, format: .number)
-                                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                                    .focused($isInputFocused).onChange(of: targetWeight) { _, _ in recalculate() }
+            ZStack {
+                Form {
+                    // Goal Type & Current Weight Sections
+                    Section(header: Text("Goal Configuration")) {
+                        Picker("Goal Type", selection: $selectedGoalType) {
+                            ForEach(GoalType.allCases, id: \.self) { type in Text(type.rawValue).tag(type) }
+                        }
+                        .pickerStyle(.segmented).onChange(of: selectedGoalType) { _, _ in recalculate() }
+                        
+                        HStack {
+                            Text("Current Weight")
+                            Spacer()
+                            if let w = latestWeightKg {
+                                Text("\(w.toUserWeight(system: profile.unitSystem), specifier: "%.1f") \(unitLabel)").foregroundColor(.secondary)
+                            } else { Text("No Data").foregroundColor(.red) }
+                        }
+                        
+                        if selectedGoalType != .maintenance {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text("Target Weight (\(unitLabel))")
+                                    Spacer()
+                                    TextField("Required", value: $targetWeight, format: .number)
+                                        .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                                        .focused($isInputFocused).onChange(of: targetWeight) { _, _ in recalculate() }
+                                }
+                                if let error = validationError { Text(error).font(.caption).foregroundColor(.red) }
                             }
-                            if let error = validationError { Text(error).font(.caption).foregroundColor(.red) }
-                        }
-                        DatePicker("Target Date", selection: $targetDate, in: Date()..., displayedComponents: .date)
-                            .onChange(of: targetDate) { _, _ in recalculate() }
-                    }
-                }
-                
-                // Tolerance
-                if selectedGoalType == .maintenance {
-                    Section(header: Text("Maintenance Range"), footer: Text("Weight fluctuations within this range (+/-) are considered normal maintenance.")) {
-                        HStack {
-                            Text("Tolerance (+/-)")
-                            Spacer()
-                            TextField("2.0", value: Binding(
-                                get: { localMaintenanceTolerance.toUserWeight(system: profile.unitSystem) },
-                                set: { localMaintenanceTolerance = $0.toStoredWeight(system: profile.unitSystem) }
-                            ), format: .number).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused).frame(width: 80)
-                            Text(unitLabel).foregroundColor(.secondary)
+                            DatePicker("Target Date", selection: $targetDate, in: Date()..., displayedComponents: .date)
+                                .onChange(of: targetDate) { _, _ in recalculate() }
                         }
                     }
-                }
-                
-                // Maintenance Calorie Source
-                Section(header: Text("Maintenance Calorie Source")) {
-                    Picker("Source", selection: $maintenanceSource) {
-                        Text("Formula").tag(0)
-                        if appEstimatedMaintenance != nil { Text("App Estimate").tag(1) }
-                        Text("Manual").tag(2)
-                    }
-                    .pickerStyle(.menu).onChange(of: maintenanceSource) { _, _ in recalculate() }
                     
-                    if maintenanceSource == 2 {
-                        HStack {
-                            Text("Manual Maintenance")
-                            Spacer()
-                            TextField("kcal", text: $manualMaintenanceInput)
-                                .keyboardType(.numberPad).multilineTextAlignment(.trailing).focused($isInputFocused)
-                                .onChange(of: manualMaintenanceInput) { _, _ in recalculate() }
+                    // Tolerance
+                    if selectedGoalType == .maintenance {
+                        Section(header: Text("Maintenance Range"), footer: Text("Weight fluctuations within this range (+/-) are considered normal maintenance.")) {
+                            HStack {
+                                Text("Tolerance (+/-)")
+                                Spacer()
+                                TextField("2.0", value: Binding(
+                                    get: { localMaintenanceTolerance.toUserWeight(system: profile.unitSystem) },
+                                    set: { localMaintenanceTolerance = $0.toStoredWeight(system: profile.unitSystem) }
+                                ), format: .number).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused).frame(width: 80)
+                                Text(unitLabel).foregroundColor(.secondary)
+                            }
                         }
-                    } else {
-                        HStack { Text("Base Maintenance"); Spacer(); Text("\(maintenanceDisplay) kcal").bold() }
                     }
-                }
-                
-                // Results
-                Section(header: Text("Results")) {
-                    HStack { Text("Daily Goal"); Spacer(); Text("\(dailyGoal) kcal").bold().foregroundColor(.blue) }
-                    HStack {
-                        Text("Daily Adjustment")
-                        Spacer()
-                        Text(calculatedDeficit < 0 ? "\(calculatedDeficit) deficit" : "+\(calculatedDeficit) surplus")
-                            .font(.caption).foregroundColor(calculatedDeficit < 0 ? .green : .orange)
+                    
+                    // Maintenance Calorie Source
+                    Section(header: Text("Maintenance Calorie Source")) {
+                        Picker("Source", selection: $maintenanceSource) {
+                            Text("Formula").tag(0)
+                            if appEstimatedMaintenance != nil { Text("App Estimate").tag(1) }
+                            Text("Manual").tag(2)
+                        }
+                        .pickerStyle(.menu).onChange(of: maintenanceSource) { _, _ in recalculate() }
+                        
+                        if maintenanceSource == 2 {
+                            HStack {
+                                Text("Manual Maintenance")
+                                Spacer()
+                                TextField("kcal", text: $manualMaintenanceInput)
+                                    .keyboardType(.numberPad).multilineTextAlignment(.trailing).focused($isInputFocused)
+                                    .onChange(of: manualMaintenanceInput) { _, _ in recalculate() }
+                            }
+                        } else {
+                            HStack { Text("Base Maintenance"); Spacer(); Text("\(maintenanceDisplay) kcal").bold() }
+                        }
                     }
+                    
+                    // Results
+                    Section(header: Text("Results")) {
+                        HStack { Text("Daily Goal"); Spacer(); Text("\(dailyGoal) kcal").bold().foregroundColor(.blue) }
+                        HStack {
+                            Text("Daily Adjustment")
+                            Spacer()
+                            Text(calculatedDeficit < 0 ? "\(calculatedDeficit) deficit" : "+\(calculatedDeficit) surplus")
+                                .font(.caption).foregroundColor(calculatedDeficit < 0 ? .green : .orange)
+                        }
+                    }
+                    
+                    Section {
+                        Button("Save Configuration") { save() }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .disabled(
+                            (selectedGoalType != .maintenance && (targetWeight == nil || validationError != nil)) ||
+                            latestWeightKg == nil ||
+                            (maintenanceSource == 2 && manualMaintenanceInput.isEmpty)
+                        )
+                    }
+                    
+                    // Spacer for Keyboard
+                    Section {
+                        Color.clear.frame(height: 80)
+                    }
+                    .listRowBackground(Color.clear)
                 }
+                .scrollDismissesKeyboard(.interactively)
                 
-                Section {
-                    Button("Save Configuration") { save() }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .disabled(
-                        (selectedGoalType != .maintenance && (targetWeight == nil || validationError != nil)) ||
-                        latestWeightKg == nil ||
-                        (maintenanceSource == 2 && manualMaintenanceInput.isEmpty)
-                    )
+                // MARK: - Custom Keyboard Toolbar
+                VStack {
+                    Spacer()
+                    if isKeyboardVisible {
+                        VStack(spacing: 0) {
+                            Divider()
+                            HStack {
+                                Spacer()
+                                Button("Done") {
+                                    hideKeyboard()
+                                }
+                                .bold()
+                                .tint(.blue)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                            }
+                            .background(.bar)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
             }
-            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Reconfigure Goal")
-            // MARK: - FIX: Keyboard Toolbar
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+            }
+            // MARK: - Keyboard Observers
+            .onAppear {
+                loadFromProfile()
                 
-                if isInputFocused {
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button("Done") {
-                            isInputFocused = false
-                        }
-                        .fontWeight(.bold)
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isKeyboardVisible = true
+                    }
+                }
+                
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isKeyboardVisible = false
                     }
                 }
             }
-            .onAppear { loadFromProfile() }
         }
+    }
+    
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
     
     private func loadFromProfile() {

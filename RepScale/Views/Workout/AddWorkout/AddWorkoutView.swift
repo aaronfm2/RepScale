@@ -15,10 +15,7 @@ struct AddWorkoutView: View {
     let workoutToEdit: Workout?
     
     @State private var viewModel: AddWorkoutViewModel
-    
-    // MARK: - FOCUS STATE
-    // This now strictly controls only the Notes field
-    @FocusState private var isNotesFocused: Bool
+    @State private var isKeyboardVisible = false
     
     init(workoutToEdit: Workout?, profile: UserProfile) {
         self.workoutToEdit = workoutToEdit
@@ -30,25 +27,63 @@ struct AddWorkoutView: View {
     
     var body: some View {
         NavigationStack {
-            Form {
-                sessionSection
-                exercisesSection
-                addExerciseSection
-                RestTimerSection()
-                notesSection
-                
-                // Bottom Spacer for Keyboard
-                Section {
-                    Color.clear.frame(height: 400)
+            ZStack {
+                Form {
+                    sessionSection
+                    exercisesSection
+                    addExerciseSection
+                    RestTimerSection()
+                    notesSection
+                    
+                    // Bottom Spacer for Keyboard
+                    // Ensures the last fields can be scrolled above the custom toolbar
+                    Section {
+                        Color.clear.frame(height: 80)
+                    }
+                    .listRowBackground(Color.clear)
                 }
-                .listRowBackground(Color.clear)
+                .scrollDismissesKeyboard(.interactively)
+                
+                // MARK: - Custom Keyboard Toolbar
+                // This sits at the bottom of the screen (or just above the keyboard)
+                // and looks exactly like a native toolbar.
+                VStack {
+                    Spacer()
+                    if isKeyboardVisible {
+                        VStack(spacing: 0) {
+                            Divider() // Thin separator line at the top
+                            
+                            HStack {
+                                Spacer()
+                                Button("Done") {
+                                    hideKeyboard()
+                                }
+                                .bold()
+                                .tint(.blue)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12) // Standard toolbar height padding
+                            }
+                            .background(.bar) // Native translucent toolbar material
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
             }
-            .scrollDismissesKeyboard(.interactively)
+            .onAppear {
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isKeyboardVisible = true
+                    }
+                }
+                
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isKeyboardVisible = false
+                    }
+                }
+            }
             .navigationTitle(workoutToEdit == nil ? "Log Workout" : "Edit Workout")
             .toolbar {
-                // MARK: - Navigation Bar Items
-                // Note: We REMOVED the keyboard toolbar from here to prevent duplicates
-                
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") { dismiss() }
                 }
@@ -112,6 +147,10 @@ struct AddWorkoutView: View {
         }
     }
     
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+    
     private func triggerDebouncedSave() {
         guard !viewModel.exercises.isEmpty else { return }
         viewModel.scheduleAutosave(context: modelContext)
@@ -171,7 +210,6 @@ extension AddWorkoutView {
                                 exercise: ex,
                                 index: index,
                                 unitSystem: profile.unitSystem,
-                                // We no longer pass a global focus state here
                                 onInputChanged: { triggerDebouncedSave() }
                             )
                         }
@@ -214,21 +252,8 @@ extension AddWorkoutView {
     private var notesSection: some View {
         Section("Notes") {
             TextField("Workout notes...", text: $viewModel.note)
-                .focused($isNotesFocused)
                 .onChange(of: viewModel.note) {
                     triggerDebouncedSave()
-                }
-                // FIX: Attach toolbar specifically to this field
-                .toolbar {
-                    if isNotesFocused {
-                        ToolbarItemGroup(placement: .keyboard) {
-                            Spacer()
-                            Button("Done") {
-                                isNotesFocused = false
-                            }
-                            .fontWeight(.bold)
-                        }
-                    }
                 }
         }
     }
@@ -240,10 +265,6 @@ struct EditExerciseRow: View {
     @Bindable var exercise: ExerciseEntry
     let index: Int
     let unitSystem: String
-    
-    // MARK: - LOCAL FOCUS STATE
-    // This controls the keyboard toolbar specifically for this row.
-    @FocusState private var isRowFocused: Bool
     
     var onInputChanged: () -> Void
     
@@ -270,7 +291,6 @@ struct EditExerciseRow: View {
                     HStack {
                         TextField("Dist", value: distBinding, format: .number)
                             .keyboardType(.decimalPad)
-                            .focused($isRowFocused)
                             .frame(width: 60)
                             .onChange(of: exercise.distance) { onInputChanged() }
                         
@@ -279,7 +299,6 @@ struct EditExerciseRow: View {
                         
                         TextField("Time", value: $exercise.duration, format: .number)
                             .keyboardType(.numberPad)
-                            .focused($isRowFocused)
                             .frame(width: 60)
                             .onChange(of: exercise.duration) { onInputChanged() }
                         
@@ -289,7 +308,6 @@ struct EditExerciseRow: View {
                     HStack {
                         TextField("Weight", value: weightBinding, format: .number)
                             .keyboardType(.decimalPad)
-                            .focused($isRowFocused)
                             .frame(width: 60)
                             .multilineTextAlignment(.trailing)
                             .padding(4)
@@ -305,7 +323,6 @@ struct EditExerciseRow: View {
                         
                         TextField("Reps", value: $exercise.reps, format: .number)
                             .keyboardType(.numberPad)
-                            .focused($isRowFocused)
                             .frame(width: 40)
                             .multilineTextAlignment(.trailing)
                             .padding(4)
@@ -321,23 +338,9 @@ struct EditExerciseRow: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .padding(.leading, 60)
-                .focused($isRowFocused)
                 .onChange(of: exercise.note) { onInputChanged() }
         }
         .padding(.vertical, 2)
-        // MARK: - LOCAL TOOLBAR
-        // Shows "Done" only when THIS row is active.
-        .toolbar {
-            if isRowFocused {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        isRowFocused = false
-                    }
-                    .fontWeight(.bold)
-                }
-            }
-        }
     }
 }
 
@@ -553,8 +556,8 @@ struct CustomExerciseForm: View {
     @State private var saveToLibrary = true
     @State private var selectedMuscles: Set<String> = []
     
-    // MARK: - Local Focus State
-    @FocusState private var isInputFocused: Bool
+    // 1. Add State for keyboard visibility
+    @State private var isKeyboardVisible = false
     
     var availableMuscles: [String] {
         let standard = Set(MuscleGroup.allCases.map { $0.rawValue })
@@ -566,59 +569,89 @@ struct CustomExerciseForm: View {
     }
     
     var body: some View {
-        Form {
-            Section("New Exercise Details") {
-                TextField("Name (e.g. Burpees)", text: $name)
-                    .focused($isInputFocused)
-                Toggle("Cardio Exercise?", isOn: $isCardio)
-                TextField("Default Note (Optional)", text: $note)
-                    .focused($isInputFocused)
-            }
-            
-            Section {
-                Toggle("Save to Exercise Library", isOn: $saveToLibrary)
-            } footer: {
-                Text("Save this exercise to your library for future use.")
-            }
-            
-            if saveToLibrary {
-                Section("Target Muscles (Required)") {
-                    ForEach(availableMuscles, id: \.self) { muscle in
-                        HStack {
-                            Text(muscle)
-                            Spacer()
-                            if selectedMuscles.contains(muscle) {
-                                Image(systemName: "checkmark").foregroundColor(.blue)
+        ZStack {
+            Form {
+                Section("New Exercise Details") {
+                    TextField("Name (e.g. Burpees)", text: $name)
+                    Toggle("Cardio Exercise?", isOn: $isCardio)
+                    TextField("Default Note (Optional)", text: $note)
+                }
+                
+                Section {
+                    Toggle("Save to Exercise Library", isOn: $saveToLibrary)
+                } footer: {
+                    Text("Save this exercise to your library for future use.")
+                }
+                
+                if saveToLibrary {
+                    Section("Target Muscles (Required)") {
+                        ForEach(availableMuscles, id: \.self) { muscle in
+                            HStack {
+                                Text(muscle)
+                                Spacer()
+                                if selectedMuscles.contains(muscle) {
+                                    Image(systemName: "checkmark").foregroundColor(.blue)
+                                }
                             }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if selectedMuscles.contains(muscle) {
-                                selectedMuscles.remove(muscle)
-                            } else {
-                                selectedMuscles.insert(muscle)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if selectedMuscles.contains(muscle) {
+                                    selectedMuscles.remove(muscle)
+                                } else {
+                                    selectedMuscles.insert(muscle)
+                                }
                             }
                         }
                     }
                 }
+                
+                Button("Add to Workout") {
+                    saveAndFinish()
+                }
+                .disabled(isInvalid)
+                
+                // 2. Add Spacer for Keyboard
+                Section {
+                    Color.clear.frame(height: 80)
+                }
+                .listRowBackground(Color.clear)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            
+            // 3. Add Custom Toolbar Overlay
+            VStack {
+                Spacer()
+                if isKeyboardVisible {
+                    VStack(spacing: 0) {
+                        Divider()
+                        HStack {
+                            Spacer()
+                            Button("Done") {
+                                hideKeyboard()
+                            }
+                            .bold()
+                            .tint(.blue)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+                        .background(.bar)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+        }
+        .navigationTitle("Custom Exercise")
+        // 4. Add Observers
+        .onAppear {
+            NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { _ in
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isKeyboardVisible = true
+                }
             }
             
-            Button("Add to Workout") {
-                saveAndFinish()
-            }
-            .disabled(isInvalid)
-        }
-        .scrollDismissesKeyboard(.interactively)
-        .navigationTitle("Custom Exercise")
-        // MARK: - Keyboard Toolbar
-        .toolbar {
-            if isInputFocused {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        isInputFocused = false
-                    }
-                    .fontWeight(.bold)
+            NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isKeyboardVisible = false
                 }
             }
         }
@@ -646,6 +679,10 @@ struct CustomExerciseForm: View {
             note: note
         )
         onSave(newEx)
+    }
+    
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 

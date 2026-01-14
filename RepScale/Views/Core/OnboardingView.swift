@@ -10,6 +10,9 @@ struct OnboardingView: View {
     @State private var currentStep = 0
     @FocusState private var isInputFocused: Bool
     
+    // MARK: - Keyboard State
+    @State private var isKeyboardVisible = false
+    
     // MARK: - Local Data Collection
     @State private var unitSystem: UnitSystem = .metric
     @State private var isDarkMode: Bool = true
@@ -148,20 +151,44 @@ struct OnboardingView: View {
                     .padding(.bottom, 20)
                 }
             }
+            
+            // MARK: - Custom Keyboard Toolbar
+            VStack {
+                Spacer()
+                if isKeyboardVisible {
+                    VStack(spacing: 0) {
+                        Divider()
+                        HStack {
+                            Spacer()
+                            Button("Done") {
+                                hideKeyboard()
+                            }
+                            .bold()
+                            .tint(.blue)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+                        .background(.bar)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
         }
         .preferredColorScheme(isDarkMode ? .dark : .light)
         .simultaneousGesture(TapGesture().onEnded { _ in
             hideKeyboard() })
-        // MARK: - FIX: Keyboard Toolbar
-        .toolbar {
-            if isInputFocused {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        isInputFocused = false
-                    }
-                    .fontWeight(.bold)
-                    .foregroundColor(.blue)
+        
+        // MARK: - Keyboard Observers
+        .onAppear {
+            NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { _ in
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isKeyboardVisible = true
+                }
+            }
+            
+            NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isKeyboardVisible = false
                 }
             }
         }
@@ -173,7 +200,6 @@ struct OnboardingView: View {
             // Must have weight
             if currentWeight == nil { return true }
             // Must have height (either direct cm or ft/in depending on mode)
-            // Logic: if currentHeight is nil, we check if the user entered ft/in validly
             if currentHeight == nil {
                 if heightUnit == .metric { return true }
                 if heightUnit == .imperial && (heightFt == nil || heightIn == nil) { return true }
@@ -345,7 +371,8 @@ struct OnboardingView: View {
                 .cornerRadius(16)
                 .padding(.horizontal)
                 
-                Spacer(minLength: 50)
+                // Spacer for Keyboard
+                Color.clear.frame(height: 80)
             }
             .padding(.top)
         }
@@ -403,7 +430,9 @@ struct OnboardingView: View {
                         }
                     }
                 }
-                Spacer(minLength: 50)
+                
+                // Spacer for Keyboard
+                Color.clear.frame(height: 80)
             }
             .padding(.top)
         }
@@ -481,7 +510,8 @@ struct OnboardingView: View {
                             }
                         }
                     }
-                    Spacer(minLength: 50)
+                    // Spacer for Keyboard
+                    Color.clear.frame(height: 80)
                 }
                 .padding(.top)
             }
@@ -584,17 +614,17 @@ struct OnboardingView: View {
     func estimateMaintenance() {
         guard let cWeight = currentWeight,
               let cHeight = currentHeight else { return }
-            
+           
         let weightKg = toKg(cWeight)
-        
+       
         // Mifflin-St Jeor Equation
         // Men: (10 × weight in kg) + (6.25 × height in cm) - (5 × age in years) + 5
         let base: Double = (10 * weightKg) + (6.25 * cHeight) - (5 * Double(computedAge))
         let genderOffset: Double = (gender == .male) ? 5 : -161
         let bmr = base + genderOffset
-        
+       
         let tdee = bmr * activityLevel.multiplier
-        
+       
         let estimated = Int(tdee)
         maintenanceInput = String(estimated)
         if dailyGoalInput.isEmpty {
@@ -606,26 +636,26 @@ struct OnboardingView: View {
         guard !knowsDetails else { return }
         guard let maintenance = Int(maintenanceInput) else { return }
         guard let cWeight = currentWeight else { return }
-        
+       
         let currentKg = toKg(cWeight)
-        
+       
         if goalType == .maintenance {
             dailyGoalInput = String(maintenance)
             return
         }
-        
+       
         guard let tWeight = targetWeight else { return }
         let targetKg = toKg(tWeight)
-        
+       
         let today = Calendar.current.startOfDay(for: Date())
         let target = Calendar.current.startOfDay(for: targetDate)
         let days = Calendar.current.dateComponents([.day], from: today, to: target).day ?? 1
-        
+       
         guard days > 0 else {
             dailyGoalInput = String(maintenance)
             return
         }
-        
+       
         let weightDiff = targetKg - currentKg
         let totalCaloriesNeeded = weightDiff * 7700.0
         let dailyAdjustment = Int(totalCaloriesNeeded / Double(days))
@@ -635,46 +665,46 @@ struct OnboardingView: View {
     
     func completeOnboarding() {
         guard let finalCurrent = currentWeight else { return }
-        
+       
         // 1. Resolve final target
         let finalTarget = (goalType == .maintenance) ? finalCurrent : (targetWeight ?? finalCurrent)
-        
+       
         // 2. Normalize to storage units (Kg, Cm)
         let storedCurrentWeightKg = toKg(finalCurrent)
         let storedTargetWeightKg = toKg(finalTarget)
         let storedMaintenance = Int(maintenanceInput) ?? 2500
         let storedDailyGoal = Int(dailyGoalInput) ?? 2000
         let storedHeight = currentHeight ?? 175.0
-        
+       
         // 3. Create and Save UserProfile
         let profile = UserProfile()
         profile.unitSystem = unitSystem.rawValue
         profile.heightUnitPreference = heightUnit.rawValue // Save height preference
         profile.isDarkMode = isDarkMode
         profile.gender = gender.rawValue
-        
+       
         // New Fields
         profile.dateOfBirth = dateOfBirth
         profile.height = storedHeight
         profile.activityLevel = activityLevel.rawValue
-        
+       
         profile.goalType = goalType.rawValue
         profile.targetWeight = storedTargetWeightKg
         profile.maintenanceTolerance = maintenanceTolerance
-        
+       
         profile.isCalorieCountingEnabled = isCalorieCountingEnabled
         profile.enableCaloriesBurned = trackCaloriesBurned
         profile.dailyCalorieGoal = storedDailyGoal
         profile.maintenanceCalories = storedMaintenance
         profile.estimationMethod = 0
-        
+       
         modelContext.insert(profile)
-        
+       
         // 4. Seed Data
         DefaultExercises.seed(context: modelContext)
         let firstEntry = WeightEntry(date: Date(), weight: storedCurrentWeightKg, note: "")
         modelContext.insert(firstEntry)
-            
+           
         dataManager.startNewGoalPeriod(
             goalType: goalType.rawValue,
             startWeight: storedCurrentWeightKg,
@@ -682,12 +712,17 @@ struct OnboardingView: View {
             dailyCalorieGoal: storedDailyGoal,
             maintenanceCalories: storedMaintenance
         )
-        
+       
         try? modelContext.save()
-        
+       
         withAnimation {
             isOnboardingCompleted = true
         }
+    }
+    
+    // Explicitly hide keyboard using standard responder chain
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 

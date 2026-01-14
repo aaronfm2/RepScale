@@ -95,8 +95,9 @@ struct ExerciseDefinitionSheet: View {
     @State private var isCardio = false
     @State private var selectedMuscles: Set<String> = []
     
-    // MARK: - FIX: Local Focus State for Keyboard Toolbar
+    // MARK: - FIX: Local Focus & Keyboard State
     @FocusState private var isInputFocused: Bool
+    @State private var isKeyboardVisible = false
     
     // UPDATED: Combine Standard + Custom + Tracked muscles
     var availableMuscles: [String] {
@@ -123,35 +124,65 @@ struct ExerciseDefinitionSheet: View {
     
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Exercise Details") {
-                    TextField("Name (e.g. Bench Press)", text: $name)
-                        .focused($isInputFocused) // FIX: Bind focus
-                    Toggle("Is Cardio?", isOn: $isCardio)
-                }
-                
-                Section("Target Muscles") {
-                    // UPDATED: Iterate over the combined list so Forearms shows up
-                    ForEach(availableMuscles, id: \.self) { muscle in
-                        HStack {
-                            Text(muscle)
-                            Spacer()
-                            if selectedMuscles.contains(muscle) {
-                                Image(systemName: "checkmark").foregroundColor(.blue)
+            ZStack {
+                Form {
+                    Section("Exercise Details") {
+                        TextField("Name (e.g. Bench Press)", text: $name)
+                            .focused($isInputFocused)
+                        Toggle("Is Cardio?", isOn: $isCardio)
+                    }
+                    
+                    Section("Target Muscles") {
+                        // UPDATED: Iterate over the combined list so Forearms shows up
+                        ForEach(availableMuscles, id: \.self) { muscle in
+                            HStack {
+                                Text(muscle)
+                                Spacer()
+                                if selectedMuscles.contains(muscle) {
+                                    Image(systemName: "checkmark").foregroundColor(.blue)
+                                }
                             }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if selectedMuscles.contains(muscle) {
-                                selectedMuscles.remove(muscle)
-                            } else {
-                                selectedMuscles.insert(muscle)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if selectedMuscles.contains(muscle) {
+                                    selectedMuscles.remove(muscle)
+                                } else {
+                                    selectedMuscles.insert(muscle)
+                                }
                             }
                         }
                     }
+                    
+                    // Spacer for Keyboard
+                    Section {
+                        Color.clear.frame(height: 80)
+                    }
+                    .listRowBackground(Color.clear)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                
+                // MARK: - Custom Keyboard Toolbar
+                VStack {
+                    Spacer()
+                    if isKeyboardVisible {
+                        VStack(spacing: 0) {
+                            Divider()
+                            HStack {
+                                Spacer()
+                                Button("Done") {
+                                    hideKeyboard()
+                                }
+                                .bold()
+                                .tint(.blue)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                            }
+                            .background(.bar)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
             }
-            .scrollDismissesKeyboard(.interactively)
             .navigationTitle(exerciseToEdit == nil ? "New Exercise" : "Edit Exercise")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -163,19 +194,26 @@ struct ExerciseDefinitionSheet: View {
                     }
                     .disabled(name.isEmpty)
                 }
+            }
+            // MARK: - Keyboard Observers
+            .onAppear {
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isKeyboardVisible = true
+                    }
+                }
                 
-                // MARK: - FIX: Keyboard Toolbar
-                if isInputFocused {
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button("Done") {
-                            isInputFocused = false
-                        }
-                        .fontWeight(.bold)
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isKeyboardVisible = false
                     }
                 }
             }
         }
+    }
+    
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
     
     private func save() {

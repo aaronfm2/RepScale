@@ -458,8 +458,9 @@ struct MuscleSelectionView: View {
     @Environment(\.dismiss) var dismiss
     @State private var newMuscleName: String = ""
     
-    // MARK: - FIX: Local Focus State for Keyboard Toolbar
+    // MARK: - FIX: Local Focus & Keyboard State
     @FocusState private var isInputFocused: Bool
+    @State private var isKeyboardVisible = false
     
     var activeMuscles: Set<String> { Set(profile.trackedMuscles.components(separatedBy: ",").filter { !$0.isEmpty }) }
     var customMusclesList: [String] {
@@ -472,61 +473,99 @@ struct MuscleSelectionView: View {
     
     var body: some View {
         NavigationStack {
-            List {
-                Section("Add Custom Muscle") {
-                    HStack {
-                        TextField("Muscle Name (e.g. Forearms)", text: $newMuscleName)
-                            .textInputAutocapitalization(.words)
-                            .focused($isInputFocused) // FIX: Bind Focus
-                        
-                        Button(action: addMuscle) { Text("Add").fontWeight(.bold) }
-                        .disabled(newMuscleName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                }
-                Section("Standard Muscles") {
-                    ForEach(MuscleGroup.allCases, id: \.self) { muscle in
+            ZStack {
+                List {
+                    Section("Add Custom Muscle") {
                         HStack {
-                            Text(muscle.rawValue)
-                            Spacer()
-                            if activeMuscles.contains(muscle.rawValue) { Image(systemName: "checkmark").foregroundColor(.blue) }
+                            TextField("Muscle Name (e.g. Forearms)", text: $newMuscleName)
+                                .textInputAutocapitalization(.words)
+                                .focused($isInputFocused)
+                            
+                            Button(action: addMuscle) { Text("Add").fontWeight(.bold) }
+                            .disabled(newMuscleName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         }
-                        .contentShape(Rectangle()).onTapGesture { toggleTracking(muscle.rawValue) }
                     }
-                }
-                if !customMusclesList.isEmpty {
-                    Section("Custom Muscles") {
-                        ForEach(customMusclesList, id: \.self) { muscle in
+                    Section("Standard Muscles") {
+                        ForEach(MuscleGroup.allCases, id: \.self) { muscle in
                             HStack {
-                                Text(muscle)
+                                Text(muscle.rawValue)
                                 Spacer()
-                                if activeMuscles.contains(muscle) { Image(systemName: "checkmark").foregroundColor(.blue) }
+                                if activeMuscles.contains(muscle.rawValue) { Image(systemName: "checkmark").foregroundColor(.blue) }
                             }
-                            .contentShape(Rectangle()).onTapGesture { toggleTracking(muscle) }
+                            .contentShape(Rectangle()).onTapGesture { toggleTracking(muscle.rawValue) }
                         }
-                        .onDelete(perform: deleteCustomMuscle)
+                    }
+                    if !customMusclesList.isEmpty {
+                        Section("Custom Muscles") {
+                            ForEach(customMusclesList, id: \.self) { muscle in
+                                HStack {
+                                    Text(muscle)
+                                    Spacer()
+                                    if activeMuscles.contains(muscle) { Image(systemName: "checkmark").foregroundColor(.blue) }
+                                }
+                                .contentShape(Rectangle()).onTapGesture { toggleTracking(muscle) }
+                            }
+                            .onDelete(perform: deleteCustomMuscle)
+                        }
+                    }
+                    
+                    // Spacer for Keyboard
+                    Section {
+                        Color.clear.frame(height: 80)
+                    }
+                    .listRowBackground(Color.clear)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                
+                // MARK: - Custom Keyboard Toolbar
+                VStack {
+                    Spacer()
+                    if isKeyboardVisible {
+                        VStack(spacing: 0) {
+                            Divider()
+                            HStack {
+                                Spacer()
+                                Button("Done") {
+                                    hideKeyboard()
+                                }
+                                .bold()
+                                .tint(.blue)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                            }
+                            .background(.bar)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
             }
             .navigationTitle("Track Muscles")
-            // MARK: - FIX: Keyboard Toolbar + Navigation Bar Button
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+            // MARK: - Keyboard Observers
+            .onAppear {
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isKeyboardVisible = true
+                    }
+                }
                 
-                if isInputFocused {
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button("Done") {
-                            isInputFocused = false
-                        }
-                        .fontWeight(.bold)
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isKeyboardVisible = false
                     }
                 }
             }
-            .scrollDismissesKeyboard(.interactively)
         }
     }
+    
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+    
     func addMuscle() {
         let trimmed = newMuscleName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }

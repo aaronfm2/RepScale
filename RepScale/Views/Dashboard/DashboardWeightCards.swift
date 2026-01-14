@@ -169,8 +169,9 @@ struct MaintenanceSelectionSheet: View {
     @State private var manualValue: Int
     @State private var isManual: Bool
     
-    // Track focus for keyboard
+    // Track focus & Keyboard State
     @FocusState private var isInputFocused: Bool
+    @State private var isKeyboardVisible = false
     
     init(profile: UserProfile, formulaValue: Int, appEstimate: Int?) {
         self.profile = profile
@@ -180,8 +181,6 @@ struct MaintenanceSelectionSheet: View {
         let current = profile.maintenanceCalories
         
         // Initial state logic
-        // We initialize manualValue to the current value so the field isn't empty,
-        // but we won't overwrite it later when clicking buttons.
         _manualValue = State(initialValue: current)
         
         if current == formulaValue {
@@ -195,79 +194,110 @@ struct MaintenanceSelectionSheet: View {
     
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    // Formula Option
-                    Button {
-                        apply(val: formulaValue, manual: false)
-                    } label: {
-                        row(title: "Formula Estimate",
-                            subtitle: "Based on your height, weight, age and activity level using the Mifflin-St Jeor forumla",
-                            value: formulaValue,
-                            isSelected: !isManual && profile.maintenanceCalories == formulaValue)
-                    }
-                    .tint(.primary)
-                    
-                    // App Estimate Option
-                    if let app = appEstimate {
+            ZStack {
+                List {
+                    Section {
+                        // Formula Option
                         Button {
-                            apply(val: app, manual: false)
+                            apply(val: formulaValue, manual: false)
                         } label: {
-                            row(title: "App Estimate",
-                                subtitle: "Derived from your 30-day log history",
-                                value: app,
-                                isSelected: !isManual && profile.maintenanceCalories == app)
+                            row(title: "Formula Estimate",
+                                subtitle: "Based on your height, weight, age and activity level using the Mifflin-St Jeor forumla",
+                                value: formulaValue,
+                                isSelected: !isManual && profile.maintenanceCalories == formulaValue)
                         }
                         .tint(.primary)
+                        
+                        // App Estimate Option
+                        if let app = appEstimate {
+                            Button {
+                                apply(val: app, manual: false)
+                            } label: {
+                                row(title: "App Estimate",
+                                    subtitle: "Derived from your 30-day log history",
+                                    value: app,
+                                    isSelected: !isManual && profile.maintenanceCalories == app)
+                            }
+                            .tint(.primary)
+                        }
+                        
+                        // Manual Option
+                        HStack {
+                            // Tapping the Label/VStack selects Manual
+                            VStack(alignment: .leading) {
+                                Text("Manual")
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+                                Text("Set your own fixed value")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .contentShape(Rectangle()) // Makes the whole text area tappable
+                            .onTapGesture {
+                                selectManual()
+                            }
+                            
+                            Spacer()
+                            
+                            TextField("kcal", value: $manualValue, format: .number)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .focused($isInputFocused)
+                                .frame(width: 90)
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 12)
+                                .background(Color.gray.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                                // Updates when value changes (typing)
+                                .onChange(of: manualValue) { _, newVal in
+                                    isManual = true
+                                    profile.maintenanceCalories = newVal
+                                }
+                            
+                            if isManual {
+                                Image(systemName: "checkmark")
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.blue)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                        // Watch focus state: if user taps box, select manual immediately
+                        .onChange(of: isInputFocused) { _, focused in
+                            if focused {
+                                selectManual()
+                            }
+                        }
+                    } header: {
+                        Text("Calorie Source")
                     }
                     
-                    // Manual Option
-                    HStack {
-                        // Tapping the Label/VStack selects Manual
-                        VStack(alignment: .leading) {
-                            Text("Manual")
-                                .font(.body)
-                                .foregroundStyle(.primary)
-                            Text("Set your own fixed value")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .contentShape(Rectangle()) // Makes the whole text area tappable
-                        .onTapGesture {
-                            selectManual()
-                        }
-                        
-                        Spacer()
-                        
-                        TextField("kcal", value: $manualValue, format: .number)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($isInputFocused)
-                            .frame(width: 90)
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 12)
-                            .background(Color.gray.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-                            // Updates when value changes (typing)
-                            .onChange(of: manualValue) { _, newVal in
-                                isManual = true
-                                profile.maintenanceCalories = newVal
+                    // Spacer for Keyboard
+                    Section {
+                        Color.clear.frame(height: 80)
+                    }
+                    .listRowBackground(Color.clear)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                
+                // MARK: - Custom Keyboard Toolbar
+                VStack {
+                    Spacer()
+                    if isKeyboardVisible {
+                        VStack(spacing: 0) {
+                            Divider()
+                            HStack {
+                                Spacer()
+                                Button("Done") {
+                                    hideKeyboard()
+                                }
+                                .bold()
+                                .tint(.blue)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
                             }
-                        
-                        if isManual {
-                            Image(systemName: "checkmark")
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.blue)
+                            .background(.bar)
                         }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
-                    .padding(.vertical, 2)
-                    // Watch focus state: if user taps box, select manual immediately
-                    .onChange(of: isInputFocused) { _, focused in
-                        if focused {
-                            selectManual()
-                        }
-                    }
-                } header: {
-                    Text("Calorie Source")
                 }
             }
             .navigationTitle("Maintenance Config")
@@ -278,18 +308,27 @@ struct MaintenanceSelectionSheet: View {
                     Button("Done") { dismiss() }
                         .fontWeight(.semibold)
                 }
-                
-                // Keyboard Done Button
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") {
-                        isInputFocused = false
+            }
+            // MARK: - Keyboard Observers
+            .onAppear {
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isKeyboardVisible = true
                     }
-                    .fontWeight(.semibold)
+                }
+                
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isKeyboardVisible = false
+                    }
                 }
             }
         }
         .presentationDetents([.medium, .fraction(0.5)])
+    }
+    
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
     
     private func selectManual() {

@@ -115,6 +115,9 @@ struct LogListContent: View {
     }
     @FocusState private var focusedField: LogField?
     
+    // MARK: - FIX: Keyboard State for Sheet
+    @State private var isKeyboardVisible = false
+    
     init(profile: UserProfile, startDate: Date, endDate: Date, dateRange: Binding<LogTabView.DateRangeOption>, showCustomDateSheet: Binding<Bool>) {
         self.profile = profile
         self.startDate = startDate
@@ -386,68 +389,92 @@ struct LogListContent: View {
     
     private var logSheetContent: some View {
         NavigationStack {
-            Form {
-                Section("Date & Mode") {
-                    DatePicker("Log Date", selection: $selectedLogDate, displayedComponents: .date)
-                    Picker("Mode", selection: $inputMode) {
-                        Text("Add to Total").tag(0)
-                        Text("Set Total").tag(1)
+            ZStack {
+                Form {
+                    Section("Date & Mode") {
+                        DatePicker("Log Date", selection: $selectedLogDate, displayedComponents: .date)
+                        Picker("Mode", selection: $inputMode) {
+                            Text("Add to Total").tag(0)
+                            Text("Set Total").tag(1)
+                        }
+                        .pickerStyle(.segmented)
                     }
-                    .pickerStyle(.segmented)
-                }
-                
-                if profile.isCalorieCountingEnabled {
-                    Section("Energy") {
-                        HStack {
-                            Text("Calories")
-                            Spacer()
-                            TextField("kcal", text: $caloriesInput)
-                                .focused($focusedField, equals: .calories)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
+                    
+                    if profile.isCalorieCountingEnabled {
+                        Section("Energy") {
+                            HStack {
+                                Text("Calories")
+                                Spacer()
+                                TextField("kcal", text: $caloriesInput)
+                                    .focused($focusedField, equals: .calories)
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                        }
+                        Section("Macros (Optional)") {
+                            HStack {
+                                Text("Protein (g)")
+                                Spacer()
+                                TextField("0", text: $proteinInput)
+                                    .focused($focusedField, equals: .protein)
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                            HStack {
+                                Text("Carbs (g)")
+                                Spacer()
+                                TextField("0", text: $carbsInput)
+                                    .focused($focusedField, equals: .carbs)
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                            HStack {
+                                Text("Fat (g)")
+                                Spacer()
+                                TextField("0", text: $fatInput)
+                                    .focused($focusedField, equals: .fat)
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                        }
+                        Section(footer: Text(inputMode == 0 ? "Values will be added to existing HealthKit data." : "Calculates the offset needed to reach this total.")) { }
+                    } else {
+                        Section {
+                            Text("Calorie counting is currently disabled in Settings.")
+                                .foregroundColor(.secondary)
                         }
                     }
-                    Section("Macros (Optional)") {
-                        HStack {
-                            Text("Protein (g)")
-                            Spacer()
-                            TextField("0", text: $proteinInput)
-                                .focused($focusedField, equals: .protein)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
-                        }
-                        HStack {
-                            Text("Carbs (g)")
-                            Spacer()
-                            TextField("0", text: $carbsInput)
-                                .focused($focusedField, equals: .carbs)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
-                        }
-                        HStack {
-                            Text("Fat (g)")
-                            Spacer()
-                            TextField("0", text: $fatInput)
-                                .focused($focusedField, equals: .fat)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
-                        }
-                    }
-                    Section(footer: Text(inputMode == 0 ? "Values will be added to existing HealthKit data." : "Calculates the offset needed to reach this total.")) { }
-                } else {
+                    
+                    // Spacer for Keyboard
                     Section {
-                        Text("Calorie counting is currently disabled in Settings.")
-                            .foregroundColor(.secondary)
+                        Color.clear.frame(height: 80)
+                    }
+                    .listRowBackground(Color.clear)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                
+                // MARK: - Custom Keyboard Toolbar
+                VStack {
+                    Spacer()
+                    if isKeyboardVisible {
+                        VStack(spacing: 0) {
+                            Divider()
+                            HStack {
+                                Spacer()
+                                Button("Done") {
+                                    hideKeyboard()
+                                }
+                                .bold()
+                                .tint(.blue)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                            }
+                            .background(.bar)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
-                
-                Section {
-                    Color.clear
-                        .frame(height: 350)
-                }
-                .listRowBackground(Color.clear)
             }
-            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Log Details")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -456,20 +483,27 @@ struct LogListContent: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { saveLog() }
                 }
+            }
+            // MARK: - Keyboard Observers
+            .onAppear {
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isKeyboardVisible = true
+                    }
+                }
                 
-                // MARK: - FIX: Conditional Keyboard Toolbar
-                if focusedField != nil {
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button("Done") {
-                            focusedField = nil
-                        }
-                        .fontWeight(.bold)
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isKeyboardVisible = false
                     }
                 }
             }
         }
         .presentationDetents([.large])
+    }
+    
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
     private func saveLog() {
