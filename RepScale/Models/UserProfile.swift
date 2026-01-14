@@ -17,7 +17,7 @@ final class UserProfile {
     // Replaced simple integer age with Date of Birth
     var dateOfBirth: Date = Calendar.current.date(byAdding: .year, value: -30, to: Date())!
     
-    var activityLevel: String = ActivityLevel.moderatelyActive.rawValue
+    var activityLevel: String = ActivityLevel.Active.rawValue
     
     // MARK: - Goals & Strategy
     var dailyCalorieGoal: Int = 2000

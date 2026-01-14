@@ -36,7 +36,6 @@ struct SettingsView: View {
         case .cutting: return .green
         case .bulking: return .red
         case .maintenance: return .blue
-        case .maintenance: return .blue // Fixed duplicate case if any, usually redundant but safe
         default: return .primary
         }
     }
@@ -332,7 +331,7 @@ struct SettingsView: View {
         
         let age = Double(profile.age)
         let height = profile.height // stored in cm
-        let activity = ActivityLevel(rawValue: profile.activityLevel) ?? .moderatelyActive
+        let activity = ActivityLevel(rawValue: profile.activityLevel) ?? .Active
         let isMale = (profile.gender == Gender.male.rawValue)
         
         // Mifflin-St Jeor Calculation

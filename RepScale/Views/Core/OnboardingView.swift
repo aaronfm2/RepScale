@@ -30,7 +30,7 @@ struct OnboardingView: View {
     // Age Logic
     @State private var dateOfBirth: Date = Calendar.current.date(byAdding: .year, value: -25, to: Date())!
     
-    @State private var activityLevel: ActivityLevel = .moderatelyActive
+    @State private var activityLevel: ActivityLevel = .Active
     
     @State private var targetWeight: Double? = nil
     @State private var goalType: GoalType = .cutting
@@ -95,60 +95,63 @@ struct OnboardingView: View {
                 .animation(.spring(response: 0.5, dampingFraction: 0.8), value: currentStep)
                 
                 // Bottom Navigation
-                if currentStep < 4 {
-                    HStack {
-                        if currentStep > 0 {
+                // FIX: Hide navigation buttons when keyboard is visible to prevent overlap with "Done" toolbar
+                if !isKeyboardVisible {
+                    if currentStep < 4 {
+                        HStack {
+                            if currentStep > 0 {
+                                Button(action: {
+                                    hideKeyboard()
+                                    withAnimation { currentStep -= 1 }
+                                }) {
+                                    Text("Back").fontWeight(.medium).foregroundColor(.secondary)
+                                }
+                            } else {
+                                Spacer()
+                            }
+                            
+                            Spacer()
+                            
                             Button(action: {
                                 hideKeyboard()
-                                withAnimation { currentStep -= 1 }
+                                withAnimation {
+                                    if currentStep == 1 {
+                                        resolveHeight()
+                                        estimateMaintenance()
+                                    }
+                                    currentStep += 1
+                                }
                             }) {
-                                Text("Back").fontWeight(.medium).foregroundColor(.secondary)
+                                HStack {
+                                    Text(currentStep == 0 ? "Get Started" : "Next")
+                                    Image(systemName: "arrow.right")
+                                }
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 24)
+                                .background(cannotMoveForward ? Color.gray : Color.blue)
+                                .clipShape(Capsule())
                             }
-                        } else {
-                            Spacer()
+                            .disabled(cannotMoveForward)
                         }
-                        
-                        Spacer()
-                        
+                        .padding()
+                        .background(appBackgroundColor.opacity(0.9))
+                    } else {
                         Button(action: {
                             hideKeyboard()
-                            withAnimation {
-                                if currentStep == 1 {
-                                    resolveHeight()
-                                    estimateMaintenance()
-                                }
-                                currentStep += 1
-                            }
+                            completeOnboarding()
                         }) {
-                            HStack {
-                                Text(currentStep == 0 ? "Get Started" : "Next")
-                                Image(systemName: "arrow.right")
-                            }
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 24)
-                            .background(cannotMoveForward ? Color.gray : Color.blue)
-                            .clipShape(Capsule())
+                            Text("Start Your Journey")
+                                .font(.headline).fontWeight(.bold).foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.blue)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
                         }
-                        .disabled(cannotMoveForward)
+                        .padding()
+                        .padding(.bottom, 20)
                     }
-                    .padding()
-                    .background(appBackgroundColor.opacity(0.9))
-                } else {
-                    Button(action: {
-                        hideKeyboard()
-                        completeOnboarding()
-                    }) {
-                        Text("Start Your Journey")
-                            .font(.headline).fontWeight(.bold).foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                    }
-                    .padding()
-                    .padding(.bottom, 20)
                 }
             }
             

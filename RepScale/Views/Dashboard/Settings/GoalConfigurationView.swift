@@ -226,7 +226,7 @@ struct GoalConfigurationView: View {
             // Mifflin-St Jeor Calculation using Profile data
             let age = Double(profile.age)
             let height = profile.height
-            let activity = ActivityLevel(rawValue: profile.activityLevel) ?? .moderatelyActive
+            let activity = ActivityLevel(rawValue: profile.activityLevel) ?? .Active
             
             let base: Double = (10 * currentKg) + (6.25 * height) - (5 * age)
             let genderOffset: Double = (userGender == .male) ? 5 : -161

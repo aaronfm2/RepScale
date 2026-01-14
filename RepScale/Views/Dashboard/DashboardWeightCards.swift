@@ -146,7 +146,7 @@ struct ProjectionComparisonCard: View {
     private func calculateFormulaMaintenance(currentWeight: Double) -> Int {
         let age = Double(profile.age)
         let height = profile.height // cm
-        let activity = ActivityLevel(rawValue: profile.activityLevel) ?? .moderatelyActive
+        let activity = ActivityLevel(rawValue: profile.activityLevel) ?? .Active
         let isMale = (profile.gender == Gender.male.rawValue)
         
         let base: Double = (10 * currentWeight) + (6.25 * height) - (5 * age)
