@@ -122,7 +122,8 @@ struct WorkoutDetailView: View {
                                         } else {
                                             let displayWeight = (exercise.weight ?? 0.0).toUserWeight(system: profile.unitSystem)
                                             
-                                            Text("\(exercise.reps ?? 0) x \(displayWeight, specifier: "%.1f") \(weightLabel)")
+                                            // MODIFIED: Swapped order to display Weight first, then Reps
+                                            Text("\(displayWeight, specifier: "%.1f") \(weightLabel) x \(exercise.reps ?? 0)")
                                                 .monospacedDigit()
                                         }
                                         

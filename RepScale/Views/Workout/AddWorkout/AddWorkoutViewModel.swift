@@ -112,10 +112,10 @@ class AddWorkoutViewModel {
             let ex = exercises[lastIndex]
             let newEx = ExerciseEntry(
                 name: ex.name,
-                reps: ex.reps,
-                weight: ex.weight,
-                duration: ex.duration,
-                distance: ex.distance,
+                reps: nil,      // MODIFIED: Was ex.reps
+                weight: nil,    // MODIFIED: Was ex.weight
+                duration: nil,  // MODIFIED: Was ex.duration
+                distance: nil,  // MODIFIED: Was ex.distance
                 isCardio: ex.isCardio,
                 note: ""
             )
