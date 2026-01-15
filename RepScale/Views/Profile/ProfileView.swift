@@ -239,7 +239,7 @@ struct ProfileView: View {
     }
     
     private var privacyPolicyLink: some View {
-        Link(destination: URL(string: "https://www.repscale.app/privacy")!) {
+        Link(destination: URL(string: "https://docs.google.com/document/d/1KFxISsNEuYNN1zi5uFd3yi592zO8T4tpLCU373MZHFU/edit?usp=sharing")!) {
             MenuOptionRow(
                 icon: "hand.raised.fill",
                 color: .primary,
