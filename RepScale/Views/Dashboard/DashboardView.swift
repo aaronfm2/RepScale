@@ -22,11 +22,9 @@ struct DashboardView: View {
     
     @State private var layout: [DashboardCardConfig] = []
     
-    @State private var showingSettings = false
     @State private var showingCustomization = false
     @State private var showingMaintenanceInfo = false
     @State private var showingReconfigureGoal = false
-    @State private var showingGoalEdit = false
 
     var weightLabel: String { profile.unitSystem == UnitSystem.imperial.rawValue ? "lbs" : "kg" }
     
@@ -61,20 +59,7 @@ struct DashboardView: View {
                     }
                     .spotlightTarget(.dashboardCustomize)
                 }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showingSettings = true }) {
-                        Image(systemName: "gearshape.fill").foregroundColor(.blue)
-                    }
-                    .spotlightTarget(.settings)
-                }
-            }
-            .sheet(isPresented: $showingSettings) {
-                SettingsView(
-                    profile: profile,
-                    estimatedMaintenance: viewModel.estimatedMaintenance,
-                    currentWeight: weights.first?.weight
-                )
+                // Settings button removed from here
             }
             .sheet(isPresented: $showingCustomization) {
                 CustomizationSheet(layout: $layout, onSave: saveLayout)
@@ -147,7 +132,7 @@ struct DashboardView: View {
                 index: index, totalCount: totalCount,
                 onMoveUp: { moveCardUp(index) }, onMoveDown: { moveCardDown(index) }
             )
-        case .repTracker: // <--- ADDED
+        case .repTracker:
             RepTrackerCard(
                 profile: profile, workouts: workouts,
                 index: index, totalCount: totalCount,
@@ -194,13 +179,12 @@ struct DashboardView: View {
         
         // Default strength exercise initialization
         if profile.strengthGraphExercise.isEmpty {
-            // Find most recent exercise, or default to a common one
             if let recent = workouts.first?.exercises?.first?.name {
                 profile.strengthGraphExercise = recent
             }
         }
         
-        // Default rep exercise initialization <--- ADDED
+        // Default rep exercise initialization
         if profile.repGraphExercise.isEmpty {
             if let recent = workouts.first?.exercises?.first?.name {
                 profile.repGraphExercise = recent

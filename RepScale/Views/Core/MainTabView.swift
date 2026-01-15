@@ -137,6 +137,11 @@ struct MainTabView: View {
                 WeightTrackerView(profile: profile)
                     .tabItem { Label("Weight", systemImage: "scalemass.fill") }
                     .tag(3)
+
+                // --- NEW PROFILE TAB ---
+                ProfileView(profile: profile)
+                    .tabItem { Label("Profile", systemImage: "person.crop.circle") }
+                    .tag(4)
             }
             // Fix: Force Bottom Tabs on iPad
             .environment(\.horizontalSizeClass, .compact)
@@ -144,7 +149,7 @@ struct MainTabView: View {
             .onChange(of: selectedTab) { _, _ in
                 currentStepIndex = 0
             }
-            
+
             // Show tutorial if active for this tab
             if showTutorial {
                 // Safety check to ensure index is valid for current tab steps
@@ -176,7 +181,7 @@ struct MainTabView: View {
             self.spotlightRects = prefs
         }
     }
-    
+
     private func markCurrentTabAsSeen() {
         switch selectedTab {
         case 0: profile.hasSeenDashboardTutorial = true
