@@ -15,9 +15,6 @@ struct SettingsView: View {
     let currentWeight: Double?
     
     @State private var showingReconfigureGoal = false
-    @State private var isExporting = false
-    @State private var exportURL: URL?
-    @State private var showingShareSheet = false
     @State private var showingRestartAlert = false
     
     // Local state for Height UI to prevent drift
@@ -232,29 +229,6 @@ struct SettingsView: View {
                         } header: { Text("Calculations") }
                     }
                     
-                    // MARK: - Section 5: Data Management
-                    Section {
-                        Button(action: exportData) {
-                            if isExporting {
-                                HStack { Text("Generating CSV..."); Spacer(); ProgressView() }
-                            } else {
-                                Label("Export Data to CSV", systemImage: "square.and.arrow.up").foregroundColor(.primary)
-                            }
-                        }.disabled(isExporting)
-                    } header: { Text("Data Management") }
-                    
-                    // MARK: - Section 6: Community
-                    Section {
-                        NavigationLink(destination: HelpSupportView()) {
-                            Label("Help & Support", systemImage: "questionmark.circle").foregroundColor(.primary)
-                        }
-                        if let url = URL(string: "https://www.instagram.com/repscale.app/") {
-                            Link(destination: url) {
-                                Label("Follow @RepScale.app", systemImage: "camera").foregroundColor(.primary)
-                            }
-                        }
-                    } header: { Text("Community") }
-                    
                     // MARK: - FIX: Spacer to enable Swipe-to-Dismiss and keyboard visiblity
                     Section {
                         Color.clear.frame(height: 80)
@@ -295,7 +269,6 @@ struct SettingsView: View {
             .sheet(isPresented: $showingReconfigureGoal) {
                 GoalConfigurationView(profile: profile, appEstimatedMaintenance: estimatedMaintenance, latestWeightKg: currentWeight)
             }
-            .sheet(isPresented: $showingShareSheet) { if let url = exportURL { ShareSheet(activityItems: [url]) } }
             .presentationDetents([.large])
             // MARK: - Keyboard Observers
             .onAppear {
@@ -350,138 +323,4 @@ struct SettingsView: View {
             }
         }
     }
-    
-    // MARK: - Export Logic
-    
-    private func exportData() {
-        isExporting = true
-        Task {
-            if let url = await generateCSV() {
-                await MainActor.run {
-                    self.exportURL = url
-                    self.isExporting = false
-                    self.showingShareSheet = true
-                }
-            } else { await MainActor.run { self.isExporting = false } }
-        }
-    }
-    
-    @MainActor
-    private func generateCSV() -> URL? {
-        let logDescriptor = FetchDescriptor<DailyLog>(sortBy: [SortDescriptor(\.date)])
-        let weightDescriptor = FetchDescriptor<WeightEntry>(sortBy: [SortDescriptor(\.date)])
-        let workoutDescriptor = FetchDescriptor<Workout>(sortBy: [SortDescriptor(\.date)])
-        let goalDescriptor = FetchDescriptor<GoalPeriod>(sortBy: [SortDescriptor(\.startDate)])
-        
-        guard let logs = try? modelContext.fetch(logDescriptor),
-              let weights = try? modelContext.fetch(weightDescriptor),
-              let workouts = try? modelContext.fetch(workoutDescriptor),
-              let goals = try? modelContext.fetch(goalDescriptor) else { return nil }
-        
-        let rawDates = logs.map { $0.date } + weights.map { $0.date } + workouts.map { $0.date }
-        let uniqueDates = Set(rawDates.map { Calendar.current.startOfDay(for: $0) })
-        let sortedDates = uniqueDates.sorted()
-        
-        let weightDays = Set(weights.map { Calendar.current.startOfDay(for: $0.date) })
-        
-        func getStreak(endingOn date: Date) -> Int {
-            guard weightDays.contains(date) else { return 0 }
-            var streak = 0
-            var d = date
-            while weightDays.contains(d) {
-                streak += 1
-                guard let prev = Calendar.current.date(byAdding: .day, value: -1, to: d) else { break }
-                d = prev
-            }
-            return streak
-        }
-        
-        var csv = "Date,Goal Type,Current Weight,Current Weight Streak,Goal Weight,Daily weight log notes,Workout Category,Muscles Trained,Sets and Reps completed,Calories Consumed,Calories Burned,Protein,Carbs,Fats,Daily summary notes\n"
-        
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-        
-        for date in sortedDates {
-            let dateStr = dateFormatter.string(from: date)
-            let dayLog = logs.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) })
-            let dayWeight = weights.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) })
-            let dayWorkouts = workouts.filter { Calendar.current.isDate($0.date, inSameDayAs: date) }
-            
-            let activeGoal = goals.first(where: {
-                let goalStart = Calendar.current.startOfDay(for: $0.startDate)
-                let goalEnd = $0.endDate.map { Calendar.current.startOfDay(for: $0) }
-                return goalStart <= date && (goalEnd == nil || goalEnd! >= date)
-            })
-            
-            let rowGoalType = dayLog?.goalType ?? activeGoal?.goalType ?? ""
-            let rowGoalWeight = activeGoal != nil ? String(format: "%.1f", activeGoal!.targetWeight) : ""
-            let rowWeight = dayWeight != nil ? String(format: "%.1f", dayWeight!.weight) : ""
-            let rowStreak = getStreak(endingOn: date)
-            let rowStreakStr = rowStreak > 0 ? "\(rowStreak)" : ""
-            let rowWeightNote = clean(dayWeight?.note)
-            
-            let categories = Set(dayWorkouts.map { $0.category }).joined(separator: "; ")
-            let muscles = Set(dayWorkouts.flatMap { $0.muscleGroups }).joined(separator: "; ")
-            
-            var exerciseDetails: [String] = []
-            for w in dayWorkouts {
-                for ex in (w.exercises ?? []) {
-                    var details = ex.name
-                    if ex.isCardio {
-                        var parts: [String] = []
-                        if let dist = ex.distance, dist > 0 { parts.append("\(dist)km") }
-                        if let dur = ex.duration, dur > 0 { parts.append("\(Int(dur))min") }
-                        if !parts.isEmpty { details += " (" + parts.joined(separator: ", ") + ")" }
-                    } else {
-                        if let r = ex.reps, let wt = ex.weight { details += " \(r)x\(wt)kg" }
-                    }
-                    exerciseDetails.append(details)
-                }
-            }
-            let rowSets = clean(exerciseDetails.joined(separator: "; "))
-            
-            let rowCalConsumed = dayLog != nil ? "\(dayLog!.caloriesConsumed)" : ""
-            let rowCalBurned = dayLog != nil ? "\(dayLog!.caloriesBurned)" : ""
-            let rowProt = dayLog?.protein != nil ? "\(dayLog!.protein!)" : ""
-            let rowCarb = dayLog?.carbs != nil ? "\(dayLog!.carbs!)" : ""
-            let rowFat = dayLog?.fat != nil ? "\(dayLog!.fat!)" : ""
-            let rowLogNote = clean(dayLog?.note)
-            
-            let row = "\(dateStr),\(clean(rowGoalType)),\(rowWeight),\(rowStreakStr),\(rowGoalWeight),\(rowWeightNote),\(clean(categories)),\(clean(muscles)),\(rowSets),\(rowCalConsumed),\(rowCalBurned),\(rowProt),\(rowCarb),\(rowFat),\(rowLogNote)\n"
-            csv.append(row)
-        }
-        
-        let tempDir = FileManager.default.temporaryDirectory
-        let fileName = "RepScale_Export_\(dateFormatter.string(from: Date())).csv"
-        let fileURL = tempDir.appendingPathComponent(fileName)
-        
-        do {
-            try csv.write(to: fileURL, atomically: true, encoding: .utf8)
-            return fileURL
-        } catch {
-            return nil
-        }
-    }
-    
-    private func clean(_ input: String?) -> String {
-        guard let input = input, !input.isEmpty else { return "" }
-        var cleaned = input.replacingOccurrences(of: "\"", with: "\"\"")
-        if cleaned.contains(",") || cleaned.contains("\n") {
-            cleaned = "\"\(cleaned)\""
-        }
-        return cleaned
-    }
-}
-
-// MARK: - ShareSheet Helper
-struct ShareSheet: UIViewControllerRepresentable {
-    var activityItems: [Any]
-    var applicationActivities: [UIActivity]? = nil
-    
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: applicationActivities)
-        return controller
-    }
-    
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

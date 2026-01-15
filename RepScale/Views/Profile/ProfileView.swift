@@ -3,6 +3,7 @@ import SwiftData
 
 struct ProfileView: View {
     @Bindable var profile: UserProfile
+    @Environment(\.modelContext) private var modelContext
     
     // --- DATA FETCHING FOR SETTINGS LOGIC ---
     @Query(sort: \DailyLog.date, order: .forward) private var logs: [DailyLog]
@@ -13,15 +14,23 @@ struct ProfileView: View {
     @State private var viewModel = DashboardViewModel()
     @State private var showingSettings = false
     
+    // Export State
+    @State private var isExporting = false
+    @State private var exportURL: URL?
+    @State private var showingShareSheet = false
+    
     // Helper to format height based on user preference
     private var heightString: String {
         if profile.heightUnitPreference == UnitSystem.imperial.rawValue {
             let totalInches = profile.height / 2.54
-            let ft = Int(totalInches / 12)
-            let inch = Int(totalInches.truncatingRemainder(dividingBy: 12))
-            return "\(ft)' \(inch)\""
+            let feet = Int(totalInches / 12)
+            let inches = Int(totalInches.truncatingRemainder(dividingBy: 12))
+            let feetString = "\(feet)'"
+            let inchesString = "\(inches)\""
+            return "\(feetString) \(inchesString)"
         } else {
-            return String(format: "%.0f cm", profile.height)
+            let centimeters = profile.height
+            return String(format: "%.0f cm", centimeters)
         }
     }
     
@@ -38,110 +47,10 @@ struct ProfileView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    // MARK: - 1. Profile Header
-                    VStack(spacing: 20) {
-                        VStack(spacing: 12) {
-                            Circle()
-                                .fill(Color.accentColor.opacity(0.1))
-                                .frame(width: 80, height: 80)
-                                .overlay(
-                                    Image(systemName: "person.fill")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 35)
-                                        .foregroundColor(.accentColor)
-                                )
-                            
-                            VStack(spacing: 4) {
-                                Text("Member since \(profile.createdAt.formatted(.dateTime.year()))")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        
-                        Divider()
-                        
-                        // Horizontal Stat Grid
-                        HStack(spacing: 0) {
-                            ProfileStatItem(label: "Age", value: "\(profile.age)")
-                            Divider().frame(height: 30)
-                            ProfileStatItem(label: "Gender", value: profile.gender)
-                            Divider().frame(height: 30)
-                            ProfileStatItem(label: "Height", value: heightString)
-                        }
-                        .padding(.bottom, 4)
-                    }
-                    .padding()
-                    .background(cardBackgroundColor)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    
-                    // MARK: - 2. Premium Banner
-                    NavigationLink {
-                        PremiumView(appBackgroundColor: appBackgroundColor)
-                    } label: {
-                        HStack(spacing: 16) {
-                            ZStack {
-                                Circle()
-                                    .fill(LinearGradient(colors: [.yellow, .orange], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                    .frame(width: 44, height: 44)
-                                    .shadow(color: .orange.opacity(0.3), radius: 5, x: 0, y: 3)
-                                
-                                Image(systemName: "crown.fill")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(.white)
-                            }
-                            
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("RepScale Premium")
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-                                Text("Unlock advanced stats & icons")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            Image(systemName: "chevron.right")
-                                .font(.caption.bold())
-                                .foregroundColor(.secondary.opacity(0.5))
-                        }
-                        .padding(16)
-                        .background(cardBackgroundColor)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(LinearGradient(colors: [.yellow.opacity(0.5), .clear], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
-                        )
-                    }
-                    
-                    // MARK: - 3. Menu Options
-                    VStack(spacing: 0) {
-                        NavigationLink(destination: HelpSupportView()) {
-                            MenuOptionRow(
-                                icon: "questionmark.circle.fill",
-                                color: .blue,
-                                title: "Help Centre",
-                                showDivider: true
-                            )
-                        }
-                        
-                        Link(destination: URL(string: "https://www.repscale.app/privacy")!) {
-                            MenuOptionRow(
-                                icon: "hand.raised.fill",
-                                color: .gray,
-                                title: "Privacy Policy",
-                                showDivider: false
-                            )
-                        }
-                    }
-                    .background(cardBackgroundColor)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    
-                    Text("RepScale v1.0.0")
-                        .font(.caption2)
-                        .foregroundColor(.secondary.opacity(0.5))
-                        .padding(.top, 10)
+                    profileHeaderCard
+                    premiumBannerLink
+                    menuOptionsCard
+                    versionText
                 }
                 .padding()
             }
@@ -161,6 +70,9 @@ struct ProfileView: View {
                     currentWeight: weights.first?.weight
                 )
             }
+            .sheet(isPresented: $showingShareSheet) {
+                if let url = exportURL { ShareSheet(activityItems: [url]) }
+            }
             .onAppear {
                 refreshData()
             }
@@ -169,6 +81,182 @@ struct ProfileView: View {
             .onChange(of: profile.dailyCalorieGoal) { _, _ in refreshData() }
         }
     }
+    
+    // MARK: - Body Subviews
+    
+    private var profileHeaderCard: some View {
+        VStack(spacing: 20) {
+            profileAvatarSection
+            Divider()
+            profileStatsGrid
+        }
+        .padding()
+        .background(cardBackgroundColor)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+    
+    private var profileAvatarSection: some View {
+        VStack(spacing: 12) {
+            Circle()
+                .fill(Color.accentColor.opacity(0.1))
+                .frame(width: 80, height: 80)
+                .overlay(
+                    Image(systemName: "person.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 35)
+                        .foregroundColor(.accentColor)
+                )
+            
+            VStack(spacing: 4) {
+                Text("Member since \(profile.createdAt.formatted(.dateTime.year()))")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+    
+    private var profileStatsGrid: some View {
+        HStack(spacing: 0) {
+            ProfileStatItem(label: "Age", value: "\(profile.age)")
+            Divider().frame(height: 30)
+            ProfileStatItem(label: "Gender", value: profile.gender)
+            Divider().frame(height: 30)
+            ProfileStatItem(label: "Height", value: heightString)
+        }
+        .padding(.bottom, 4)
+    }
+    
+    private var premiumBannerLink: some View {
+        NavigationLink {
+            PremiumView(appBackgroundColor: appBackgroundColor)
+        } label: {
+            premiumBannerContent
+        }
+    }
+    
+    private var premiumBannerContent: some View {
+        HStack(spacing: 16) {
+            premiumIcon
+            premiumText
+            Spacer()
+            chevronIcon
+        }
+        .padding(16)
+        .background(cardBackgroundColor)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(LinearGradient(
+                    colors: [.yellow.opacity(0.5), .clear],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ), lineWidth: 1)
+        )
+    }
+    
+    private var premiumIcon: some View {
+        ZStack {
+            Circle()
+                .fill(LinearGradient(
+                    colors: [.yellow, .orange],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ))
+                .frame(width: 44, height: 44)
+                .shadow(color: .orange.opacity(0.3), radius: 5, x: 0, y: 3)
+            
+            Image(systemName: "crown.fill")
+                .font(.system(size: 20))
+                .foregroundColor(.white)
+        }
+    }
+    
+    private var premiumText: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("RepScale Premium")
+                .font(.headline)
+                .foregroundColor(.primary)
+            Text("Unlock advanced stats & icons")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+    
+    private var chevronIcon: some View {
+        Image(systemName: "chevron.right")
+            .font(.caption.bold())
+            .foregroundColor(.secondary.opacity(0.5))
+    }
+    
+    private var menuOptionsCard: some View {
+        VStack(spacing: 0) {
+            helpCentreLink
+            exportDataButton
+            instagramLink
+            privacyPolicyLink
+        }
+        .background(cardBackgroundColor)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+    
+    private var helpCentreLink: some View {
+        NavigationLink(destination: HelpSupportView(profile: profile)) {
+            MenuOptionRow(
+                icon: "questionmark.circle.fill",
+                color: .primary,
+                title: "Help Centre",
+                showDivider: true
+            )
+        }
+    }
+    
+    private var exportDataButton: some View {
+        Button(action: exportData) {
+            MenuOptionRow(
+                icon: "square.and.arrow.up.fill",
+                color: .primary,
+                title: isExporting ? "Generating CSV..." : "Export Data to CSV",
+                showDivider: true
+            )
+        }
+        .disabled(isExporting)
+    }
+    
+    private var instagramLink: some View {
+        Group {
+            if let url = URL(string: "https://www.instagram.com/repscale.app/") {
+                Link(destination: url) {
+                    MenuOptionRow(
+                        icon: "camera.fill",
+                        color: .primary,
+                        title: "Follow @RepScale.app",
+                        showDivider: true
+                    )
+                }
+            }
+        }
+    }
+    
+    private var privacyPolicyLink: some View {
+        Link(destination: URL(string: "https://www.repscale.app/privacy")!) {
+            MenuOptionRow(
+                icon: "hand.raised.fill",
+                color: .primary,
+                title: "Privacy Policy",
+                showDivider: false
+            )
+        }
+    }
+    
+    private var versionText: some View {
+        Text("RepScale v1.0.0")
+            .font(.caption2)
+            .foregroundColor(.secondary.opacity(0.5))
+            .padding(.top, 10)
+    }
+    
+    // MARK: - Data Methods
     
     private func refreshData() {
         let settings = DashboardSettings(
@@ -188,6 +276,127 @@ struct ProfileView: View {
             workouts: workouts,
             weeklyGoal: profile.weeklyWorkoutGoal
         )
+    }
+    
+    // MARK: - Export Logic
+    
+    private func exportData() {
+        isExporting = true
+        Task {
+            if let url = await generateCSV() {
+                await MainActor.run {
+                    self.exportURL = url
+                    self.isExporting = false
+                    self.showingShareSheet = true
+                }
+            } else { await MainActor.run { self.isExporting = false } }
+        }
+    }
+    
+    @MainActor
+    private func generateCSV() -> URL? {
+        let logDescriptor = FetchDescriptor<DailyLog>(sortBy: [SortDescriptor(\.date)])
+        let weightDescriptor = FetchDescriptor<WeightEntry>(sortBy: [SortDescriptor(\.date)])
+        let workoutDescriptor = FetchDescriptor<Workout>(sortBy: [SortDescriptor(\.date)])
+        let goalDescriptor = FetchDescriptor<GoalPeriod>(sortBy: [SortDescriptor(\.startDate)])
+        
+        guard let logs = try? modelContext.fetch(logDescriptor),
+              let weights = try? modelContext.fetch(weightDescriptor),
+              let workouts = try? modelContext.fetch(workoutDescriptor),
+              let goals = try? modelContext.fetch(goalDescriptor) else { return nil }
+        
+        let rawDates = logs.map { $0.date } + weights.map { $0.date } + workouts.map { $0.date }
+        let uniqueDates = Set(rawDates.map { Calendar.current.startOfDay(for: $0) })
+        let sortedDates = uniqueDates.sorted()
+        
+        let weightDays = Set(weights.map { Calendar.current.startOfDay(for: $0.date) })
+        
+        func getStreak(endingOn date: Date) -> Int {
+            guard weightDays.contains(date) else { return 0 }
+            var streak = 0
+            var d = date
+            while weightDays.contains(d) {
+                streak += 1
+                guard let prev = Calendar.current.date(byAdding: .day, value: -1, to: d) else { break }
+                d = prev
+            }
+            return streak
+        }
+        
+        var csv = "Date,Goal Type,Current Weight,Current Weight Streak,Goal Weight,Daily weight log notes,Workout Category,Muscles Trained,Sets and Reps completed,Calories Consumed,Calories Burned,Protein,Carbs,Fats,Daily summary notes\n"
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        
+        for date in sortedDates {
+            let dateStr = dateFormatter.string(from: date)
+            let dayLog = logs.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) })
+            let dayWeight = weights.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) })
+            let dayWorkouts = workouts.filter { Calendar.current.isDate($0.date, inSameDayAs: date) }
+            
+            let activeGoal = goals.first(where: {
+                let goalStart = Calendar.current.startOfDay(for: $0.startDate)
+                let goalEnd = $0.endDate.map { Calendar.current.startOfDay(for: $0) }
+                return goalStart <= date && (goalEnd == nil || goalEnd! >= date)
+            })
+            
+            let rowGoalType = dayLog?.goalType ?? activeGoal?.goalType ?? ""
+            let rowGoalWeight = activeGoal != nil ? String(format: "%.1f", activeGoal!.targetWeight) : ""
+            let rowWeight = dayWeight != nil ? String(format: "%.1f", dayWeight!.weight) : ""
+            let rowStreak = getStreak(endingOn: date)
+            let rowStreakStr = rowStreak > 0 ? "\(rowStreak)" : ""
+            let rowWeightNote = clean(dayWeight?.note)
+            
+            let categories = Set(dayWorkouts.map { $0.category }).joined(separator: "; ")
+            let muscles = Set(dayWorkouts.flatMap { $0.muscleGroups }).joined(separator: "; ")
+            
+            var exerciseDetails: [String] = []
+            for w in dayWorkouts {
+                for ex in (w.exercises ?? []) {
+                    var details = ex.name
+                    if ex.isCardio {
+                        var parts: [String] = []
+                        if let dist = ex.distance, dist > 0 { parts.append("\(dist)km") }
+                        if let dur = ex.duration, dur > 0 { parts.append("\(Int(dur))min") }
+                        if !parts.isEmpty { details += " (" + parts.joined(separator: ", ") + ")" }
+                    } else {
+                        if let r = ex.reps, let wt = ex.weight { details += " \(r)x\(wt)kg" }
+                    }
+                    exerciseDetails.append(details)
+                }
+            }
+            let rowSets = clean(exerciseDetails.joined(separator: "; "))
+            
+            let rowCalConsumed = dayLog != nil ? "\(dayLog!.caloriesConsumed)" : ""
+            let rowCalBurned = dayLog != nil ? "\(dayLog!.caloriesBurned)" : ""
+            let rowProt = dayLog?.protein != nil ? "\(dayLog!.protein!)" : ""
+            let rowCarb = dayLog?.carbs != nil ? "\(dayLog!.carbs!)" : ""
+            let rowFat = dayLog?.fat != nil ? "\(dayLog!.fat!)" : ""
+            let rowLogNote = clean(dayLog?.note)
+            
+            let row = "\(dateStr),\(clean(rowGoalType)),\(rowWeight),\(rowStreakStr),\(rowGoalWeight),\(rowWeightNote),\(clean(categories)),\(clean(muscles)),\(rowSets),\(rowCalConsumed),\(rowCalBurned),\(rowProt),\(rowCarb),\(rowFat),\(rowLogNote)\n"
+            csv.append(row)
+        }
+        
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileName = "RepScale_Export_\(dateFormatter.string(from: Date())).csv"
+        let fileURL = tempDir.appendingPathComponent(fileName)
+        
+        do {
+            try csv.write(to: fileURL, atomically: true, encoding: .utf8)
+            return fileURL
+        } catch {
+            return nil
+        }
+    }
+    
+    private func clean(_ input: String?) -> String {
+        guard let input = input, !input.isEmpty else { return "" }
+        var cleaned = input.replacingOccurrences(of: "\"", with: "\"\"")
+        if cleaned.contains(",") || cleaned.contains("\n") {
+            cleaned = "\"\(cleaned)\""
+        }
+        return cleaned
     }
 }
 
@@ -242,6 +451,19 @@ struct MenuOptionRow: View {
             }
         }
     }
+}
+
+// MARK: - ShareSheet Helper
+struct ShareSheet: UIViewControllerRepresentable {
+    var activityItems: [Any]
+    var applicationActivities: [UIActivity]? = nil
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: applicationActivities)
+        return controller
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - NEW Premium View (Sticky Footer Version)
