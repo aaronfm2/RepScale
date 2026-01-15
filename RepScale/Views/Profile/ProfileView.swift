@@ -26,12 +26,10 @@ struct ProfileView: View {
     }
     
     // MARK: - Colors
-    // Matches the custom background color used in DashboardView
     var appBackgroundColor: Color {
         profile.isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
     }
     
-    // Slightly lighter/different color for cards to pop against the background
     var cardBackgroundColor: Color {
         profile.isDarkMode ? Color(red: 0.16, green: 0.16, blue: 0.18) : Color(uiColor: .secondarySystemGroupedBackground)
     }
@@ -41,7 +39,6 @@ struct ProfileView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     // MARK: - 1. Profile Header
-                    // Consolidates user details into a single clean card
                     VStack(spacing: 20) {
                         VStack(spacing: 12) {
                             Circle()
@@ -85,18 +82,20 @@ struct ProfileView: View {
                         HStack(spacing: 16) {
                             ZStack {
                                 Circle()
-                                    .fill(Color.yellow.opacity(0.15))
+                                    .fill(LinearGradient(colors: [.yellow, .orange], startPoint: .topLeading, endPoint: .bottomTrailing))
                                     .frame(width: 44, height: 44)
+                                    .shadow(color: .orange.opacity(0.3), radius: 5, x: 0, y: 3)
+                                
                                 Image(systemName: "crown.fill")
                                     .font(.system(size: 20))
-                                    .foregroundColor(.yellow)
+                                    .foregroundColor(.white)
                             }
                             
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("RepScale Premium")
                                     .font(.headline)
                                     .foregroundColor(.primary)
-                                Text("See whats available with premium")
+                                Text("Unlock advanced stats & icons")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -110,6 +109,10 @@ struct ProfileView: View {
                         .padding(16)
                         .background(cardBackgroundColor)
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(LinearGradient(colors: [.yellow.opacity(0.5), .clear], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
+                        )
                     }
                     
                     // MARK: - 3. Menu Options
@@ -135,7 +138,6 @@ struct ProfileView: View {
                     .background(cardBackgroundColor)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     
-                    // Footer Version
                     Text("RepScale v1.0.0")
                         .font(.caption2)
                         .foregroundColor(.secondary.opacity(0.5))
@@ -145,7 +147,6 @@ struct ProfileView: View {
             }
             .background(appBackgroundColor)
             .navigationTitle("Profile")
-            // MARK: - Settings Toolbar
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: { showingSettings = true }) {
@@ -243,136 +244,224 @@ struct MenuOptionRow: View {
     }
 }
 
-// MARK: - Premium View (Existing)
+// MARK: - NEW Premium View (Sticky Footer Version)
+
 struct PremiumView: View {
     @Environment(\.dismiss) var dismiss
+    var appBackgroundColor: Color
     
-    // Pass the background color down so this view matches too
-    var appBackgroundColor: Color = Color(uiColor: .systemGroupedBackground)
+    // State for selected plan
+    enum SubscriptionPeriod { case yearly, monthly }
+    @State private var selectedPeriod: SubscriptionPeriod = .yearly
     
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 30) {
-                    // Header
-                    VStack(spacing: 15) {
-                        Image(systemName: "crown.fill")
-                            .font(.system(size: 60))
-                            .foregroundStyle(.yellow)
+        ZStack {
+            // Background
+            appBackgroundColor.ignoresSafeArea()
+            
+            // 1. Scrollable Content (Header + Features)
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(spacing: 30) {
+                        // Hero Header
+                        VStack(spacing: 16) {
+                            ZStack {
+                                Circle()
+                                    .fill(LinearGradient(colors: [.yellow.opacity(0.8), .orange], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(width: 80, height: 80)
+                                    .shadow(color: .orange.opacity(0.4), radius: 10, x: 0, y: 5)
+                                Image(systemName: "crown.fill")
+                                    .font(.system(size: 36))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            VStack(spacing: 8) {
+                                Text("Unlock Full Potential")
+                                    .font(.title2.bold())
+                                    .multilineTextAlignment(.center)
+                                
+                                Text("Advanced analytics, unlimited history, and custom tools to reach your goals faster.")
+                                    .font(.body)
+                                    .multilineTextAlignment(.center)
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, 20)
+                            }
+                        }
+                        .padding(.top, 20)
+                        
+                        // Comparison Table Card
+                        VStack(spacing: 0) {
+                            // Table Header
+                            HStack {
+                                Text("Features")
+                                    .font(.footnote.bold())
+                                    .textCase(.uppercase)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                
+                                Text("Free")
+                                    .font(.footnote.bold())
+                                    .textCase(.uppercase)
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 50)
+                                
+                                Text("Pro")
+                                    .font(.footnote.bold())
+                                    .textCase(.uppercase)
+                                    .foregroundStyle(.blue)
+                                    .frame(width: 50)
+                            }
                             .padding()
-                            .background(Circle().fill(.yellow.opacity(0.15)))
-                        
-                        VStack(spacing: 8) {
-                            Text("Upgrade to Premium")
-                                .font(.title.bold())
+                            .background(Color.secondary.opacity(0.05))
                             
-                            Text("Take your fitness to the next level with advanced analytics.")
-                                .multilineTextAlignment(.center)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal)
+                            Divider()
+                            
+                            VStack(spacing: 0) {
+                                FeatureRow(name: "Add & Track Workouts", free: true, premium: true)
+                                FeatureRow(name: "Track Weight & Nutrition", free: true, premium: true)
+                                FeatureRow(name: "Premium Dashboard Views", free: false, premium: true)
+                                FeatureRow(name: "Custom Workout Templates", free: false, premium: true)
+                                FeatureRow(name: "Add Progress Photos", free: false, premium: true)
+                                FeatureRow(name: "View Unlimited Log History", free: false, premium: true)
+                                FeatureRow(name: "Detailed Apple HealthKit Nutrition", free: false, premium: true)
+                                FeatureRow(name: "Custom Muscle Groups", free: false, premium: true)
+                                FeatureRow(name: "Export Data to CSV", free: false, premium: true)
+                            }
                         }
+                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.05)))
+                        .padding(.horizontal)
+                        
+                        // spacer large enough so content clears the fixed footer
+                        Color.clear.frame(height: 250)
                     }
-                    .padding(.top, 20)
-                    
-                    // Comparison Table
-                    VStack(spacing: 0) {
-                        // Table Header
-                        HStack {
-                            Text("Feature")
-                                .font(.subheadline.bold())
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            
-                            Text("Free")
-                                .font(.subheadline.bold())
-                                .frame(width: 60)
-                                .foregroundColor(.secondary)
-                            
-                            Text("Pro")
-                                .font(.subheadline.bold())
-                                .frame(width: 60)
-                                .foregroundColor(.blue)
-                        }
-                        .padding()
-                        .background(Color(uiColor: .secondarySystemBackground))
-                        
-                        Divider()
-                        
-                        // Features
-                        Group {
-                            FeatureRow(name: "Add & Track Workouts", free: true, premium: true)
-                            FeatureRow(name: "Track Weight & Nutrition", free: true, premium: true)
-                            FeatureRow(name: "Premium Dashboard Views", free: false, premium: true)
-                            FeatureRow(name: "Custom Workout Templates", free: false, premium: true)
-                            FeatureRow(name: "Add Progress Photos", free: false, premium: true)
-                            FeatureRow(name: "View Unlimited Log History", free: false, premium: true)
-                            FeatureRow(name: "Detailed Apple HealthKit Nutrition", free: false, premium: true)
-                            FeatureRow(name: "Custom Muscle Groups", free: false, premium: true)
-                            FeatureRow(name: "Export Data to CSV", free: false, premium: true)
-                        }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                    )
-                    .padding(.horizontal)
-                    
-                    // Spacer
-                    Color.clear.frame(height: 20)
                 }
             }
-            .background(appBackgroundColor) // Match background here
             
-            // Fixed Footer for Pricing
-            VStack(spacing: 12) {
-                Divider()
+            // 2. Fixed Bottom Sheet (Plans + CTA)
+            VStack(spacing: 0) {
+                Spacer()
                 
-                // Yearly Option (Primary Call to Action)
-                Button(action: {
-                    // In-App Purchase logic for YEARLY
-                }) {
-                    VStack(spacing: 4) {
-                        Text("Start 7-Day Free Trial")
-                            .font(.headline)
-                            .fontWeight(.bold) // Highlighted
+                VStack(spacing: 16) {
+                    
+                    // Plan Selection (Visible Always)
+                    HStack(spacing: 10) {
+                        // Monthly
+                        PlanSelectionCard(
+                            title: "Monthly",
+                            price: "£1.99",
+                            subtitle: "/mo",
+                            isSelected: selectedPeriod == .monthly,
+                            badge: nil // No badge
+                        )
+                        .onTapGesture { withAnimation { selectedPeriod = .monthly } }
                         
-                        Text("Then $14.99 / year")
-                            .font(.caption)
-                            .opacity(0.9)
+                        // Yearly
+                        PlanSelectionCard(
+                            title: "Yearly",
+                            price: "£14.99",
+                            subtitle: "/yr",
+                            isSelected: selectedPeriod == .yearly,
+                            badge: "BEST VALUE"
+                        )
+                        .onTapGesture { withAnimation { selectedPeriod = .yearly } }
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-                }
-                .padding(.horizontal)
-                .padding(.top, 8)
-                
-                // Monthly Option (Secondary)
-                Button(action: {
-                    // In-App Purchase logic for MONTHLY
-                }) {
-                    Text("Or Monthly - $1.99 / month")
-                        .font(.subheadline)
-                        .foregroundColor(.blue)
-                }
-                .padding(.bottom, 4)
-                
-                Text("Auto-renewable subscription. Cancel anytime.")
+                    
+                    // Main CTA
+                    Button(action: {
+                        // Purchase Logic
+                    }) {
+                        Text(ctaText)
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .shadow(color: .blue.opacity(0.3), radius: 8, x: 0, y: 4)
+                    }
+                    
+                    // Links
+                    HStack(spacing: 16) {
+                        Button("Restore Purchases") { /* Logic */ }
+                        Text("•")
+                        Text("Auto-renewable")
+                    }
                     .font(.caption2)
                     .foregroundColor(.secondary)
-                    .padding(.bottom, 8)
+                }
+                .padding(16)
+                .background(.regularMaterial) // Glass effect
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: -5)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 4)
             }
-            .background(.regularMaterial)
         }
         .navigationBarTitleDisplayMode(.inline)
-        // Ensure the main container also has the background if needed
-        .background(appBackgroundColor)
+    }
+    
+    var ctaText: String {
+        switch selectedPeriod {
+        case .yearly: return "Start 7-Day Free Trial"
+        case .monthly: return "Subscribe for $1.99"
+        }
     }
 }
 
-// Helper for the Table Rows
+// MARK: - Premium Helper Views
+
+struct PlanSelectionCard: View {
+    let title: String
+    let price: String
+    let subtitle: String
+    let isSelected: Bool
+    let badge: String?
+    
+    var body: some View {
+        ZStack(alignment: .top) {
+            VStack(spacing: 3) {
+                Text(title)
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(isSelected ? .primary : .secondary)
+                
+                HStack(alignment: .lastTextBaseline, spacing: 2) {
+                    Text(price).font(.title3.bold())
+                    Text(subtitle).font(.caption2).foregroundColor(.secondary)
+                }
+                
+                // Badge Logic: Always render the Text to maintain height, but use Opacity/Colors to hide
+                Text(badge ?? "BEST VALUE")
+                    .font(.system(size: 7, weight: .bold))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(badge != nil ? Color.green.opacity(0.15) : Color.clear)
+                    .foregroundColor(badge != nil ? .green : .clear)
+                    .clipShape(Capsule())
+                    .padding(.top, 3)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color(uiColor: .tertiarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+            )
+            .shadow(color: .black.opacity(isSelected ? 0.1 : 0), radius: 4, x: 0, y: 2)
+            
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.blue)
+                    .font(.caption)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .topTrailing)
+            }
+        }
+    }
+}
+
 struct FeatureRow: View {
     let name: String
     let free: Bool
@@ -386,21 +475,19 @@ struct FeatureRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 12)
                 
-                // Free Column
                 Image(systemName: free ? "checkmark" : "minus")
-                    .foregroundColor(free ? .primary : .secondary.opacity(0.5))
+                    .foregroundColor(free ? .primary : .secondary.opacity(0.3))
                     .font(.caption.bold())
-                    .frame(width: 60)
+                    .frame(width: 50)
                 
-                // Premium Column
                 Image(systemName: premium ? "checkmark" : "lock.fill")
                     .foregroundColor(premium ? .blue : .secondary)
                     .font(.caption.bold())
-                    .frame(width: 60)
+                    .frame(width: 50)
             }
             .padding(.horizontal)
             
-            Divider()
+            Divider().padding(.leading)
         }
     }
 }
