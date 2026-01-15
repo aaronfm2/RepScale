@@ -6,7 +6,7 @@ struct HelpSupportView: View {
     var appBackgroundColor: Color {
         profile.isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
     }
-
+    
     var cardBackgroundColor: Color {
         profile.isDarkMode ? Color(red: 0.153, green: 0.153, blue: 0.165) : Color.white
     }
@@ -134,26 +134,26 @@ struct HelpSupportView: View {
                 
                 // 3. Maintenance Estimation (Moved from Common)
                 NavigationLink(destination: AnswerView(profile: profile, title: "Maintenance Estimation") {
-                     VStack(alignment: .leading, spacing: 24) {
-                         // --- Formula Estimate Section ---
-                         VStack(alignment: .leading, spacing: 12) {
-                             Text("Formula Estimate").font(.title2).bold().foregroundColor(.blue)
-                             Text("Based on the **Mifflin-St Jeor** equation multiplied by your activity level.")
-                             
-                             VStack(alignment: .leading, spacing: 8) {
-                                 Text("BMR = (10 × weight) + (6.25 × height) - (5 × age) + s")
-                                     .font(.system(.callout, design: .monospaced)).fontWeight(.medium)
-                             }
-                             .padding().frame(maxWidth: .infinity, alignment: .leading).background(formulaBoxColor).cornerRadius(12)
-                         }
-                         Divider()
-                         // --- App Estimate Section ---
-                         VStack(alignment: .leading, spacing: 12) {
-                             Text("App Estimate").font(.title2).bold().foregroundColor(.blue)
-                             Text("Your **True Maintenance** is calculated by analyzing your actual data over the last 30 days.")
-                             Text("Maintenance = Avg. Intake - Daily Surplus").font(.system(.callout, design: .monospaced))
-                         }
-                     }
+                    VStack(alignment: .leading, spacing: 24) {
+                        // --- Formula Estimate Section ---
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Formula Estimate").font(.title2).bold().foregroundColor(.blue)
+                            Text("Based on the **Mifflin-St Jeor** equation multiplied by your activity level.")
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("BMR = (10 × weight) + (6.25 × height) - (5 × age) + s")
+                                    .font(.system(.callout, design: .monospaced)).fontWeight(.medium)
+                            }
+                            .padding().frame(maxWidth: .infinity, alignment: .leading).background(formulaBoxColor).cornerRadius(12)
+                        }
+                        Divider()
+                        // --- App Estimate Section ---
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("App Estimate").font(.title2).bold().foregroundColor(.blue)
+                            Text("Your **True Maintenance** is calculated by analyzing your actual data over the last 30 days.")
+                            Text("Maintenance = Avg. Intake - Daily Surplus").font(.system(.callout, design: .monospaced))
+                        }
+                    }
                 }) {
                     Text("How is maintenance estimated?")
                         .foregroundColor(.primary)
@@ -222,9 +222,9 @@ struct HelpSupportView: View {
                 // 4. Muscle Recovery
                 NavigationLink(destination: AnswerView(profile: profile, title: "Muscle Recovery") {
                     VStack(alignment: .leading, spacing: 24) {
-                         Text("Recovery Tracking")
-                             .font(.title2).bold().foregroundColor(.blue)
-                         Text("The dashboard displays a muscle heatmap. Muscles you trained recently appear **Red** (recovering) and turn **Green** (ready) over time.")
+                        Text("Recovery Tracking")
+                            .font(.title2).bold().foregroundColor(.blue)
+                        Text("The dashboard displays a muscle heatmap. Muscles you trained recently appear **Red** (recovering) and turn **Green** (ready) over time.")
                     }
                 }) {
                     Text("Tracking muscle recovery")
@@ -233,61 +233,137 @@ struct HelpSupportView: View {
             }
             .listRowBackground(cardBackgroundColor)
             
-            // MARK: - Section: Premium Features
+            // MARK: - Section: RepScale Premium
             Section(header: Text("RepScale Premium")) {
                 
-                // 1. Data Export
+                // 1. Premium Dashboard Views
+                NavigationLink(destination: AnswerView(profile: profile, title: "Dashboard Views") {
+                    VStack(alignment: .leading, spacing: 24) {
+                        Text("Advanced Insights")
+                            .font(.title2).bold().foregroundColor(.blue)
+                        Text("Unlock powerful visualizations to track your progress at a glance.")
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            StepCard(num: 1, title: "Muscle Heatmap", desc: "Visualize which muscles are recovering (Red) vs ready to train (Green).", bg: formulaBoxColor)
+                            StepCard(num: 2, title: "Macro Trends", desc: "See your Protein, Carb, and Fat intake averages over the last 7 days.", bg: formulaBoxColor)
+                            StepCard(num: 3, title: "Extended Charts", desc: "View weight and calorie trends over 3 months, 6 months, or 1 year.", bg: formulaBoxColor)
+                        }
+                    }
+                }) {
+                    Label("Premium Dashboard Views", systemImage: "chart.bar.fill")
+                        .foregroundColor(.primary)
+                }
+                
+                // 2. Custom Workout Templates
+                NavigationLink(destination: AnswerView(profile: profile, title: "Workout Templates") {
+                    VStack(alignment: .leading, spacing: 24) {
+                        Text("Unlimited Routines")
+                            .font(.title2).bold().foregroundColor(.blue)
+                        Text("Save as many workout routines as you need (e.g., Push A, Pull B, Leg Day).")
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("How to create:")
+                                .font(.headline)
+                            StepCard(num: 1, title: "Create", desc: "Go to the Workout Tab > Tap '+ Add Workout'.", bg: formulaBoxColor)
+                            StepCard(num: 2, title: "Save", desc: "Add your exercises, then tap 'Save as Template' in the top right menu.", bg: formulaBoxColor)
+                        }
+                    }
+                }) {
+                    Label("Custom Workout Templates", systemImage: "list.clipboard.fill")
+                        .foregroundColor(.primary)
+                }
+                
+                // 3. Add Progress Photos
+                NavigationLink(destination: AnswerView(profile: profile, title: "Progress Photos") {
+                    VStack(alignment: .leading, spacing: 24) {
+                        Text("Visual Tracking")
+                            .font(.title2).bold().foregroundColor(.blue)
+                        Text("Securely attach photos to your weight logs to track physical changes alongside the scale number.")
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("How to add:")
+                                .font(.headline)
+                            StepCard(num: 1, title: "Log Weight", desc: "Go to the Weight Tab and tap the + button.", bg: formulaBoxColor)
+                            StepCard(num: 2, title: "Attach", desc: "Tap the Camera icon to take a photo or choose from your library.", bg: formulaBoxColor)
+                        }
+                        Text("Note: Photos are stored locally on your device/iCloud and are never shared.")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                }) {
+                    Label("Add Progress Photos", systemImage: "camera.fill")
+                        .foregroundColor(.primary)
+                }
+                
+                // 4. View Unlimited Log History
+                NavigationLink(destination: AnswerView(profile: profile, title: "Log History") {
+                    VStack(alignment: .leading, spacing: 24) {
+                        Text("Full Archives")
+                            .font(.title2).bold().foregroundColor(.blue)
+                        Text("Access your entire training and nutrition history from Day 1.")
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            StepCard(num: 1, title: "Calendar", desc: "Scroll back indefinitely in the Calendar view to see past workouts.", bg: formulaBoxColor)
+                            StepCard(num: 2, title: "Analysis", desc: "Compare your current strength levels to where you started months or years ago.", bg: formulaBoxColor)
+                        }
+                    }
+                }) {
+                    Label("View Unlimited Log History", systemImage: "clock.arrow.circlepath")
+                        .foregroundColor(.primary)
+                }
+                
+                // 5. Detailed Apple HealthKit Nutrition
+                NavigationLink(destination: AnswerView(profile: profile, title: "Macro Sync") {
+                    VStack(alignment: .leading, spacing: 24) {
+                        Text("Beyond Calories")
+                            .font(.title2).bold().foregroundColor(.blue)
+                        Text("Sync detailed macronutrient data (Protein, Fats, Carbs) from apps like MyFitnessPal, Cronometer, or LoseIt!.")
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            StepCard(num: 1, title: "Setup", desc: "Enable 'HealthKit Sync' in Settings > Tracking.", bg: formulaBoxColor)
+                            StepCard(num: 2, title: "Permissions", desc: "Ensure RepScale has permission to read Protein, Fat, and Carbohydrates in iOS Health Settings.", bg: formulaBoxColor)
+                        }
+                    }
+                }) {
+                    Label("Detailed HealthKit Nutrition", systemImage: "heart.text.square.fill")
+                        .foregroundColor(.primary)
+                }
+                
+                // 6. Custom Muscle Groups
+                NavigationLink(destination: AnswerView(profile: profile, title: "Custom Muscles") {
+                    VStack(alignment: .leading, spacing: 24) {
+                        Text("Specific Targeting")
+                            .font(.title2).bold().foregroundColor(.blue)
+                        Text("Define your own target areas to better organize your custom exercises.")
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            StepCard(num: 1, title: "Define", desc: "Create tags like 'Upper Chest' or 'Rear Delts' instead of generic groups.", bg: formulaBoxColor)
+                            StepCard(num: 2, title: "Filter", desc: "Filter your Exercise Library by these custom groups to find movements faster.", bg: formulaBoxColor)
+                        }
+                    }
+                }) {
+                    Label("Custom Muscle Groups", systemImage: "figure.arms.open")
+                        .foregroundColor(.primary)
+                }
+                
+                // 7. Export Data to CSV
                 NavigationLink(destination: AnswerView(profile: profile, title: "Data Export") {
                     VStack(alignment: .leading, spacing: 24) {
                         Text("Data Ownership")
                             .font(.title2).bold().foregroundColor(.blue)
-                        Text("Premium users can export their entire database to CSV format for use in Excel or other tools.")
+                        Text("Download your entire database in a standard CSV format compatible with Excel or Google Sheets.")
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            StepCard(num: 1, title: "Export", desc: "Go to Settings > Data Management.", bg: formulaBoxColor)
+                            StepCard(num: 2, title: "Share", desc: "Tap 'Export to CSV' and choose where to save or send the file.", bg: formulaBoxColor)
+                        }
                     }
                 }) {
-                    Label("Data Export (CSV)", systemImage: "star.fill")
+                    Label("Export Data to CSV", systemImage: "square.and.arrow.up.fill")
                         .foregroundColor(.primary)
-                }
-                
-                // 2. Advanced Analytics
-                NavigationLink(destination: AnswerView(profile: profile, title: "Advanced Analytics") {
-                    VStack(alignment: .leading, spacing: 24) {
-                        Text("Deep Insights")
-                            .font(.title2).bold().foregroundColor(.blue)
-                        Text("Unlock extended time ranges (90 days, 1 Year, All Time) for weight trends and strength progression graphs.")
-                    }
-                }) {
-                    Label("Advanced Analytics", systemImage: "star.fill")
-                        .foregroundColor(.primary)
-                }
-                
-                // 3. Unlimited Routines
-                NavigationLink(destination: AnswerView(profile: profile, title: "Unlimited Logging") {
-                    VStack(alignment: .leading, spacing: 24) {
-                        Text("No Limits")
-                            .font(.title2).bold().foregroundColor(.blue)
-                        Text("Remove all restrictions on the number of saved workout templates and custom exercises.")
-                    }
-                }) {
-                    Label("Unlimited Templates", systemImage: "star.fill")
-                        .foregroundColor(.primary)
-                }
-            }
-            .listRowBackground(cardBackgroundColor)
-            
-            // MARK: - Section: Contact
-            Section(header: Text("Contact")) {
-                if let url = URL(string: "mailto:feedback@repscale.app") {
-                    Link(destination: url) {
-                        Label("Email Support", systemImage: "envelope")
-                            .foregroundColor(.primary)
-                    }
                 }
             }
             .listRowBackground(cardBackgroundColor)
         }
-        .scrollContentBackground(.hidden)
-        .background(appBackgroundColor)
-        .navigationTitle("Help & Support")
     }
 }
 
