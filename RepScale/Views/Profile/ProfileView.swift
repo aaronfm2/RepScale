@@ -25,85 +25,124 @@ struct ProfileView: View {
         }
     }
     
-    // MARK: - Dark Mode Correction
+    // MARK: - Colors
     // Matches the custom background color used in DashboardView
     var appBackgroundColor: Color {
         profile.isDarkMode ? Color(red: 0.11, green: 0.11, blue: 0.12) : Color(uiColor: .systemGroupedBackground)
     }
     
+    // Slightly lighter/different color for cards to pop against the background
+    var cardBackgroundColor: Color {
+        profile.isDarkMode ? Color(red: 0.16, green: 0.16, blue: 0.18) : Color(uiColor: .secondarySystemGroupedBackground)
+    }
+    
     var body: some View {
         NavigationStack {
-            List {
-                // MARK: - User Details
-                Section {
-                    HStack(spacing: 15) {
-                        Circle()
-                            .fill(Color.accentColor.opacity(0.1))
-                            .frame(width: 60, height: 60)
-                            .overlay(
-                                Image(systemName: "person.fill")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 30)
-                                    .foregroundColor(.accentColor)
-                            )
-                        
-                        VStack(alignment: .leading) {
-                            Text("Member since \(profile.createdAt.formatted(.dateTime.year()))")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .padding(.vertical, 8)
-                    
-                    LabeledContent("Age", value: "\(profile.age)")
-                    LabeledContent("Gender", value: profile.gender)
-                    LabeledContent("Height", value: heightString)
-                } header: {
-                    Text("Personal Details")
-                }
-                
-                // MARK: - Premium Section
-                Section {
-                    NavigationLink {
-                        PremiumView(appBackgroundColor: appBackgroundColor)
-                    } label: {
-                        HStack {
-                            Image(systemName: "crown.fill")
-                                .foregroundColor(.yellow)
-                            VStack(alignment: .leading) {
-                                Text("RepScale Premium")
-                                    .fontWeight(.medium)
-                                Text("Unlock advanced stats & icons")
-                                    .font(.caption)
+            ScrollView {
+                VStack(spacing: 20) {
+                    // MARK: - 1. Profile Header
+                    // Consolidates user details into a single clean card
+                    VStack(spacing: 20) {
+                        VStack(spacing: 12) {
+                            Circle()
+                                .fill(Color.accentColor.opacity(0.1))
+                                .frame(width: 80, height: 80)
+                                .overlay(
+                                    Image(systemName: "person.fill")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 35)
+                                        .foregroundColor(.accentColor)
+                                )
+                            
+                            VStack(spacing: 4) {
+                                Text("Member since \(profile.createdAt.formatted(.dateTime.year()))")
+                                    .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
                         }
+                        
+                        Divider()
+                        
+                        // Horizontal Stat Grid
+                        HStack(spacing: 0) {
+                            ProfileStatItem(label: "Age", value: "\(profile.age)")
+                            Divider().frame(height: 30)
+                            ProfileStatItem(label: "Gender", value: profile.gender)
+                            Divider().frame(height: 30)
+                            ProfileStatItem(label: "Height", value: heightString)
+                        }
+                        .padding(.bottom, 4)
                     }
-                } header: {
-                    Text("Membership")
-                }
-                
-                // MARK: - Support
-                Section {
-                    NavigationLink(destination: HelpSupportView()) {
-                        Label("Help Centre", systemImage: "questionmark.circle")
+                    .padding()
+                    .background(cardBackgroundColor)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    
+                    // MARK: - 2. Premium Banner
+                    NavigationLink {
+                        PremiumView(appBackgroundColor: appBackgroundColor)
+                    } label: {
+                        HStack(spacing: 16) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.yellow.opacity(0.15))
+                                    .frame(width: 44, height: 44)
+                                Image(systemName: "crown.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.yellow)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("RepScale Premium")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Text("See whats available with premium")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.caption.bold())
+                                .foregroundColor(.secondary.opacity(0.5))
+                        }
+                        .padding(16)
+                        .background(cardBackgroundColor)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
-                } header: {
-                    Text("Support")
-                }
-                
-                // MARK: - Legal / Privacy
-                Section {
-                    Link(destination: URL(string: "https://www.repscale.app/privacy")!) {
-                        Label("Privacy Policy", systemImage: "hand.raised.fill")
+                    
+                    // MARK: - 3. Menu Options
+                    VStack(spacing: 0) {
+                        NavigationLink(destination: HelpSupportView()) {
+                            MenuOptionRow(
+                                icon: "questionmark.circle.fill",
+                                color: .blue,
+                                title: "Help Centre",
+                                showDivider: true
+                            )
+                        }
+                        
+                        Link(destination: URL(string: "https://www.repscale.app/privacy")!) {
+                            MenuOptionRow(
+                                icon: "hand.raised.fill",
+                                color: .gray,
+                                title: "Privacy Policy",
+                                showDivider: false
+                            )
+                        }
                     }
-                } header: {
-                    Text("Legal")
+                    .background(cardBackgroundColor)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    
+                    // Footer Version
+                    Text("RepScale v1.0.0")
+                        .font(.caption2)
+                        .foregroundColor(.secondary.opacity(0.5))
+                        .padding(.top, 10)
                 }
+                .padding()
             }
-            // Fix: Override default List background to match Dashboard
-            .scrollContentBackground(.hidden)
             .background(appBackgroundColor)
             .navigationTitle("Profile")
             // MARK: - Settings Toolbar
@@ -151,7 +190,60 @@ struct ProfileView: View {
     }
 }
 
-// MARK: - Premium View
+// MARK: - UI Helper Components
+
+struct ProfileStatItem: View {
+    let label: String
+    let value: String
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.headline)
+                .foregroundColor(.primary)
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+struct MenuOptionRow: View {
+    let icon: String
+    let color: Color
+    let title: String
+    let showDivider: Bool
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 16) {
+                Image(systemName: icon)
+                    .font(.system(size: 18))
+                    .foregroundColor(color)
+                    .frame(width: 24)
+                
+                Text(title)
+                    .font(.body)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .foregroundColor(.secondary.opacity(0.5))
+            }
+            .padding(16)
+            
+            if showDivider {
+                Divider()
+                    .padding(.leading, 56)
+            }
+        }
+    }
+}
+
+// MARK: - Premium View (Existing)
 struct PremiumView: View {
     @Environment(\.dismiss) var dismiss
     
