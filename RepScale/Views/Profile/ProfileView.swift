@@ -627,7 +627,7 @@ struct PremiumView: View {
     var ctaText: String {
         switch selectedPeriod {
         case .yearly: return "Start 7-Day Free Trial"
-        case .monthly: return "Subscribe for $1.99"
+        case .monthly: return "Subscribe for £1.99"
         }
     }
 }
