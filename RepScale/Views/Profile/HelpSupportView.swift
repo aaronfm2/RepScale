@@ -130,11 +130,65 @@ struct HelpSupportView: View {
                 
                 // MARK: - HealthKit Sync
                 NavigationLink(destination: AnswerView(profile: profile, title: "HealthKit Sync") {
-                    Text("Yes! We pull Active Energy and Dietary Energy from Apple Health automatically. You can also add manual entries.")
-                        .font(.body)
-                        .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 24) {
+                        
+                        // Section 1: How it works
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("How it works")
+                                .font(.title2)
+                                .bold()
+                                .foregroundColor(.blue)
+                            
+                            Text("RepScale can automatically import nutrition data from apps like **MyFitnessPal**, **Cronometer**, or **Lose It!** via Apple Health.")
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        
+                        Divider()
+                        
+                        // Section 2: Setup Guide
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Setup Guide")
+                                .font(.title2)
+                                .bold()
+                                .foregroundColor(.blue)
+                            
+                            // Step 1
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("1. Configure Nutrition App")
+                                    .font(.headline)
+                                Text("Go to your nutrition app's settings and ensure it is set to **Write** data to Apple Health.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(formulaBoxColor)
+                            .cornerRadius(12)
+                            
+                            // Step 2
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("2. Configure RepScale")
+                                    .font(.headline)
+                                Text("Ensure RepScale has permission to **Read** Dietary Energy and Macros in iOS Settings > Health > Data Access.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(formulaBoxColor)
+                            .cornerRadius(12)
+                        }
+                        
+                        Text("Once configured, your daily calories and macros will appear in RepScale automatically.")
+                            .font(.callout)
+                            .italic()
+                            .foregroundColor(.secondary)
+                            .padding(.top, 4)
+                    }
                 }) {
-                    Text("Does it sync with HealthKit?")
+                    Text("Can I sync MyFitnessPal Nutrition?")
                         .foregroundColor(.primary)
                 }
             }
