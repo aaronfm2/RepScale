@@ -17,6 +17,9 @@ struct SettingsView: View {
     @State private var showingReconfigureGoal = false
     @State private var showingRestartAlert = false
     
+    // MARK: - Delete Account State
+    @State private var showingDeleteAlert = false
+    
     // Local state for Height UI to prevent drift
     @State private var selectedHeightUnit: UnitSystem = .metric
     
@@ -229,6 +232,18 @@ struct SettingsView: View {
                         } header: { Text("Calculations") }
                     }
                     
+                    // MARK: - Section 8: Danger Zone (Delete Account)
+                    Section {
+                        Button(role: .destructive) {
+                            showingDeleteAlert = true
+                        } label: {
+                            Label("Delete Account & Data", systemImage: "trash")
+                                .foregroundColor(.red)
+                        }
+                    } header: {
+                        Text("Danger Zone")
+                    }
+                    
                     // MARK: - FIX: Spacer to enable Swipe-to-Dismiss and keyboard visiblity
                     Section {
                         Color.clear.frame(height: 80)
@@ -269,6 +284,15 @@ struct SettingsView: View {
             .sheet(isPresented: $showingReconfigureGoal) {
                 GoalConfigurationView(profile: profile, appEstimatedMaintenance: estimatedMaintenance, latestWeightKg: currentWeight)
             }
+            // MARK: - Delete Alert
+            .alert("Delete Account?", isPresented: $showingDeleteAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete Everything", role: .destructive) {
+                    deleteAccount()
+                }
+            } message: {
+                Text("This action cannot be undone. All your logs, workouts, and settings will be permanently deleted.")
+            }
             .presentationDetents([.large])
             // MARK: - Keyboard Observers
             .onAppear {
@@ -296,6 +320,28 @@ struct SettingsView: View {
     
     private func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+    
+    // MARK: - Delete Logic
+    private func deleteAccount() {
+        do {
+            // 1. Delete all models.
+            // Explicitly fetching and deleting is the safest way in SwiftData to ensure cascade.
+            try modelContext.delete(model: DailyLog.self)
+            try modelContext.delete(model: WeightEntry.self)
+            try modelContext.delete(model: Workout.self)
+            try modelContext.delete(model: GoalPeriod.self)
+            try modelContext.delete(model: ExerciseDefinition.self)
+            try modelContext.delete(model: UserProfile.self)
+            
+            // 2. Reset AppStorage flags
+            isOnboardingCompleted = false
+            hasSeenAppTutorial = false
+            
+            // 3. The App root view will automatically switch to OnboardingView due to the flag change.
+        } catch {
+            print("Error deleting account data: \(error)")
+        }
     }
     
     // MARK: - Auto-Recalculate Maintenance Logic
