@@ -241,12 +241,13 @@ struct HelpSupportView: View {
                     VStack(alignment: .leading, spacing: 24) {
                         Text("Advanced Insights")
                             .font(.title2).bold().foregroundColor(.blue)
-                        Text("Unlock powerful visualizations to track your progress at a glance.")
+                        Text("Unlock powerful visualizations to track your strength and nutrition progress at a glance.")
                         
                         VStack(alignment: .leading, spacing: 12) {
-                            StepCard(num: 1, title: "Muscle Heatmap", desc: "Visualize which muscles are recovering (Red) vs ready to train (Green).", bg: formulaBoxColor)
-                            StepCard(num: 2, title: "Macro Trends", desc: "See your Protein, Carb, and Fat intake averages over the last 7 days.", bg: formulaBoxColor)
-                            StepCard(num: 3, title: "Extended Charts", desc: "View weight and calorie trends over 3 months, 6 months, or 1 year.", bg: formulaBoxColor)
+                            StepCard(num: 1, title: "Strength Tracker", desc: "Visualise strength improvements for different exercises over time.", bg: formulaBoxColor)
+                            StepCard(num: 2, title: "Rep Strength Tracker", desc: "Visualise rep improvements for different exercises over time.", bg: formulaBoxColor)
+                            StepCard(num: 3, title: "Volume Tracker", desc: "Track volume for different workouts/exercises over time", bg: formulaBoxColor)
+                            StepCard(num: 4, title: "Nutrition and Macro Trackers", desc: "Visualise your average calories and macro each month", bg: formulaBoxColor)
                         }
                     }
                 }) {
@@ -257,9 +258,9 @@ struct HelpSupportView: View {
                 // 2. Custom Workout Templates
                 NavigationLink(destination: AnswerView(profile: profile, title: "Workout Templates") {
                     VStack(alignment: .leading, spacing: 24) {
-                        Text("Unlimited Routines")
+                        Text("Workout Templates")
                             .font(.title2).bold().foregroundColor(.blue)
-                        Text("Save as many workout routines as you need (e.g., Push A, Pull B, Leg Day).")
+                        Text("Save as many workout templates as you need (e.g., Push A, Pull B, Leg Day).")
                         
                         VStack(alignment: .leading, spacing: 12) {
                             Text("How to create:")
@@ -302,8 +303,8 @@ struct HelpSupportView: View {
                         Text("Access your entire training and nutrition history from Day 1.")
                         
                         VStack(alignment: .leading, spacing: 12) {
-                            StepCard(num: 1, title: "Calendar", desc: "Scroll back indefinitely in the Calendar view to see past workouts.", bg: formulaBoxColor)
-                            StepCard(num: 2, title: "Analysis", desc: "Compare your current strength levels to where you started months or years ago.", bg: formulaBoxColor)
+                            StepCard(num: 1, title: "Daily Log", desc: "View any time range you choose in the log tab.", bg: formulaBoxColor)
+                            StepCard(num: 2, title: "Weight", desc: "View any time range you choose in the weight tab.", bg: formulaBoxColor)
                         }
                     }
                 }) {
@@ -316,11 +317,11 @@ struct HelpSupportView: View {
                     VStack(alignment: .leading, spacing: 24) {
                         Text("Beyond Calories")
                             .font(.title2).bold().foregroundColor(.blue)
-                        Text("Sync detailed macronutrient data (Protein, Fats, Carbs) from apps like MyFitnessPal, Cronometer, or LoseIt!.")
+                        Text("Sync detailed macronutrient data (Sugar, Fibre, Caffeine etc.) from apps that have wrote to your Apple Health for example MyFitnessPal, Cronometer, or LoseIt!.")
                         
                         VStack(alignment: .leading, spacing: 12) {
                             StepCard(num: 1, title: "Setup", desc: "Enable 'HealthKit Sync' in Settings > Tracking.", bg: formulaBoxColor)
-                            StepCard(num: 2, title: "Permissions", desc: "Ensure RepScale has permission to read Protein, Fat, and Carbohydrates in iOS Health Settings.", bg: formulaBoxColor)
+                            StepCard(num: 2, title: "Permissions", desc: "Ensure RepScale has permission to read the nutrition data in iOS Health Settings.", bg: formulaBoxColor)
                         }
                     }
                 }) {
@@ -353,7 +354,7 @@ struct HelpSupportView: View {
                         Text("Download your entire database in a standard CSV format compatible with Excel or Google Sheets.")
                         
                         VStack(alignment: .leading, spacing: 12) {
-                            StepCard(num: 1, title: "Export", desc: "Go to Settings > Data Management.", bg: formulaBoxColor)
+                            StepCard(num: 1, title: "Export", desc: "Go to Profile > Export to CSV", bg: formulaBoxColor)
                             StepCard(num: 2, title: "Share", desc: "Tap 'Export to CSV' and choose where to save or send the file.", bg: formulaBoxColor)
                         }
                     }

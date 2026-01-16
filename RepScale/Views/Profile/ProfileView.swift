@@ -177,7 +177,7 @@ struct ProfileView: View {
             Text("RepScale Premium")
                 .font(.headline)
                 .foregroundColor(.primary)
-            Text("Unlock advanced stats & icons")
+            Text("See what is included with premium")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
