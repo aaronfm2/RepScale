@@ -22,20 +22,13 @@ struct MainTabView: View {
         ),
         TutorialStep(
             id: 1,
-            title: "Settings",
-            description: "Tap the Gear icon to configure your goals, dietary preferences, and calculation methods.",
-            tabIndex: 0,
-            highlights: [.target(.settings)]
-        ),
-        TutorialStep(
-            id: 2,
             title: "Customize Layout",
             description: "Tap the Sliders icon to customise your dashboard.",
             tabIndex: 0,
             highlights: [.target(.dashboardCustomize)]
         ),
         TutorialStep(
-            id: 3,
+            id: 2,
             title: "Apple Health Sync",
             description: "Click the logs tab and allow Apple Health to sync nutrition. If you use other apps which write to Apple Health (like MyFitnessPal) and wish to sync that data.",
             tabIndex: 0,
@@ -44,14 +37,14 @@ struct MainTabView: View {
         
         // LOGS STEPS (Tab 1)
         TutorialStep(
-            id: 4,
+            id: 3,
             title: "Logs Tab",
             description: "Track your daily nutrition here. This data syncs automatically with Apple Health.",
             tabIndex: 1,
             highlights: [.tab(index: 1)]
         ),
         TutorialStep(
-            id: 5,
+            id: 4,
             title: "Add Entries",
             description: "Use the + button to manually add calories or macros.",
             tabIndex: 1,
@@ -60,14 +53,14 @@ struct MainTabView: View {
         
         // WORKOUTS STEPS (Tab 2)
         TutorialStep(
-            id: 6,
+            id: 5,
             title: "Workouts Tab",
             description: "Track your training sessions and view history.",
             tabIndex: 2,
             highlights: [.tab(index: 2)]
         ),
         TutorialStep(
-            id: 7,
+            id: 6,
             title: "Workout Controls",
             description: "Top Right: Start a new workout.\nTop Left: Manage your Exercise Library.",
             tabIndex: 2,
@@ -76,25 +69,41 @@ struct MainTabView: View {
         
         // WEIGHT STEPS (Tab 3)
         TutorialStep(
-            id: 8,
+            id: 7,
             title: "Weight Tab",
             description: "Keep track of your weigh-ins.",
             tabIndex: 3,
             highlights: [.tab(index: 3)]
         ),
         TutorialStep(
-            id: 9,
+            id: 8,
             title: "Phase Stats",
             description: "Review your Bulking, Cutting, and Maintenance phases.",
             tabIndex: 3,
             highlights: [.target(.weightStats)]
         ),
         TutorialStep(
-            id: 10,
+            id: 9,
             title: "Log Weight",
             description: "Tap the + button to log today's weight.",
             tabIndex: 3,
             highlights: [.target(.addWeight)]
+        ),
+        
+        // PROFILE STEPS (Tab 4) - ADDED
+        TutorialStep(
+            id: 10,
+            title: "Profile Tab",
+            description: "View your stats, manage your subscription, and export your data.",
+            tabIndex: 4,
+            highlights: [.tab(index: 4)]
+        ),
+        TutorialStep(
+            id: 11,
+            title: "Settings",
+            description: "Tap the Gear icon to configure your goals, dietary preferences, and calculation methods.",
+            tabIndex: 4,
+            highlights: [.target(.profileSettings)]
         )
     ]
     
@@ -112,6 +121,7 @@ struct MainTabView: View {
         case 1: return !profile.hasSeenLogsTutorial
         case 2: return !profile.hasSeenWorkoutsTutorial
         case 3: return !profile.hasSeenWeightTutorial
+        case 4: return !profile.hasSeenProfileTutorial // <--- ADDED
         default: return false
         }
     }
@@ -137,6 +147,11 @@ struct MainTabView: View {
                 WeightTrackerView(profile: profile)
                     .tabItem { Label("Weight", systemImage: "scalemass.fill") }
                     .tag(3)
+
+                // --- NEW PROFILE TAB ---
+                ProfileView(profile: profile)
+                    .tabItem { Label("Profile", systemImage: "person.crop.circle") }
+                    .tag(4)
             }
             // Fix: Force Bottom Tabs on iPad
             .environment(\.horizontalSizeClass, .compact)
@@ -144,7 +159,7 @@ struct MainTabView: View {
             .onChange(of: selectedTab) { _, _ in
                 currentStepIndex = 0
             }
-            
+
             // Show tutorial if active for this tab
             if showTutorial {
                 // Safety check to ensure index is valid for current tab steps
@@ -176,13 +191,14 @@ struct MainTabView: View {
             self.spotlightRects = prefs
         }
     }
-    
+
     private func markCurrentTabAsSeen() {
         switch selectedTab {
         case 0: profile.hasSeenDashboardTutorial = true
         case 1: profile.hasSeenLogsTutorial = true
         case 2: profile.hasSeenWorkoutsTutorial = true
         case 3: profile.hasSeenWeightTutorial = true
+        case 4: profile.hasSeenProfileTutorial = true // <--- ADDED
         default: break
         }
     }
