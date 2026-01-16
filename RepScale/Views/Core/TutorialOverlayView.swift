@@ -2,13 +2,13 @@ import SwiftUI
 
 // MARK: - 1. Identifiers
 enum SpotlightTargetID: String, CaseIterable {
-    case settings
     case dashboardCustomize
     case addLog
     case addWorkout
     case library
     case addWeight
     case weightStats
+    case profileSettings // <--- ADDED
 }
 
 enum SpotlightArea: Hashable {
@@ -128,7 +128,7 @@ struct TutorialOverlayView: View {
             }
             
         case .tab(let index):
-            let tabCount = 4
+            let tabCount = 5 // <--- FIXED: Changed from 4 to 5
             let tabWidth = geo.size.width / CGFloat(tabCount)
             let xCenter = (CGFloat(index) * tabWidth) + (tabWidth / 2)
             

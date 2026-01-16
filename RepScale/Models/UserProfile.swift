@@ -38,6 +38,7 @@ final class UserProfile {
     var hasSeenLogsTutorial: Bool = false
     var hasSeenWorkoutsTutorial: Bool = false
     var hasSeenWeightTutorial: Bool = false
+    var hasSeenProfileTutorial: Bool = false
     
     // MARK: - Dashboard Customization
     var dashboardLayoutJSON: String = ""

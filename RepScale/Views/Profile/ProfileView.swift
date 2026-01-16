@@ -61,6 +61,7 @@ struct ProfileView: View {
                     Button(action: { showingSettings = true }) {
                         Image(systemName: "gearshape.fill")
                     }
+                    .spotlightTarget(.profileSettings) // <--- ADDED
                 }
             }
             .sheet(isPresented: $showingSettings) {
@@ -82,6 +83,7 @@ struct ProfileView: View {
         }
     }
     
+    // ... (rest of the file remains unchanged) ...
     // MARK: - Body Subviews
     
     private var profileHeaderCard: some View {
