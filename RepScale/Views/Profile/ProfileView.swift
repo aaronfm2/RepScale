@@ -474,8 +474,8 @@ struct PremiumView: View {
     @Environment(\.dismiss) var dismiss
     var appBackgroundColor: Color
     
-    // State for selected plan
-    enum SubscriptionPeriod { case yearly, monthly }
+    // 1. Updated Enum
+    enum SubscriptionPeriod { case yearly, monthly, lifetime }
     @State private var selectedPeriod: SubscriptionPeriod = .yearly
     
     var body: some View {
@@ -570,26 +570,36 @@ struct PremiumView: View {
                 VStack(spacing: 16) {
                     
                     // Plan Selection (Visible Always)
-                    HStack(spacing: 10) {
+                    HStack(spacing: 8) { // Reduced spacing slightly to fit 3 cards
                         // Monthly
                         PlanSelectionCard(
                             title: "Monthly",
                             price: "£1.99",
                             subtitle: "/mo",
                             isSelected: selectedPeriod == .monthly,
-                            badge: nil // No badge
+                            badge: nil
                         )
                         .onTapGesture { withAnimation { selectedPeriod = .monthly } }
                         
                         // Yearly
                         PlanSelectionCard(
                             title: "Yearly",
-                            price: "£14.99",
+                            price: "£10.99",
                             subtitle: "/yr",
                             isSelected: selectedPeriod == .yearly,
                             badge: "BEST VALUE"
                         )
                         .onTapGesture { withAnimation { selectedPeriod = .yearly } }
+                        
+                        // Lifetime (NEW)
+                        PlanSelectionCard(
+                            title: "Lifetime",
+                            price: "£19.99",
+                            subtitle: "/once",
+                            isSelected: selectedPeriod == .lifetime,
+                            badge: "FOREVER"
+                        )
+                        .onTapGesture { withAnimation { selectedPeriod = .lifetime } }
                     }
                     
                     // Main CTA
@@ -610,7 +620,8 @@ struct PremiumView: View {
                     HStack(spacing: 16) {
                         Button("Restore Purchases") { /* Logic */ }
                         Text("•")
-                        Text("Auto-renewable")
+                        // Dynamic text based on selection
+                        Text(selectedPeriod == .lifetime ? "One-time payment" : "Auto-renewable")
                     }
                     .font(.caption2)
                     .foregroundColor(.secondary)
@@ -626,10 +637,12 @@ struct PremiumView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
     
+    // Updated CTA Logic
     var ctaText: String {
         switch selectedPeriod {
         case .yearly: return "Start 7-Day Free Trial"
         case .monthly: return "Subscribe for £1.99"
+        case .lifetime: return "Unlock Forever for £49.99"
         }
     }
 }
